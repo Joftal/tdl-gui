@@ -191,8 +191,9 @@ class TDLDownloaderApp:
             links_field = ft.TextField(
                 label="下载链接 (每行一个)",
                 multiline=True,
-                min_lines=6,
-                max_lines=10,
+                min_lines=10,
+                max_lines=10,  # 减少显示行数
+                height=220,   # 减少固定高度
                 hint_text="在此粘贴下载链接，每行一个",
                 prefix_icon=ft.Icons.LINK_ROUNDED,
                 **textfield_style
@@ -323,13 +324,16 @@ class TDLDownloaderApp:
                                                     ]
                                                 ),
                                                 ft.Divider(height=1, thickness=1, color=ft.Colors.BLACK12),
-                                                links_field,
+                                                ft.Container(
+                                                    content=links_field,
+                                                    height=220,  # 减少容器高度
+                                                ),
                                                 ft.Row(
                                                     [download_button, open_folder_button],
                                                     spacing=10
                                                 ),
                                             ]),
-                                            padding=15
+                                            padding=5
                                         ),
                                         elevation=2,
                                         margin=ft.margin.only(top=15),
@@ -353,7 +357,7 @@ class TDLDownloaderApp:
                                             content=ft.Column([
                                                 ft.Row(
                                                     [
-                                                        ft.Icon(ft.Icons.TRENDING_UP_ROUNDED, color=ft.Colors.PURPLE_400),
+                                                        ft.Icon(ft.Icons.TRENDING_DOWN_ROUNDED, color=ft.Colors.PURPLE_400),
                                                         ft.Text("下载进度", style=subtitle_style),
                                                     ]
                                                 ),
@@ -439,11 +443,53 @@ class TDLDownloaderApp:
             # 上传文件选择
             self.selected_files = []
             
+            # 调整文件选择按钮为垂直布局
+            file_picker_buttons = ft.Column(
+                [
+                    ft.ElevatedButton(
+                        text="选择单个文件",
+                        icon=ft.Icons.FILE_UPLOAD_ROUNDED,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=8),
+                            padding=ft.padding.all(10),
+                        ),
+                        on_click=lambda _: file_picker_single.pick_files(
+                            allow_multiple=False
+                        ),
+                        width=150  # 设置固定宽度
+                    ),
+                    ft.ElevatedButton(
+                        text="选择多个文件",
+                        icon=ft.Icons.UPLOAD_FILE_ROUNDED,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=8),
+                            padding=ft.padding.all(10),
+                        ),
+                        on_click=lambda _: file_picker_multiple.pick_files(
+                            allow_multiple=True
+                        ),
+                        width=150  # 设置固定宽度
+                    ),
+                    ft.ElevatedButton(
+                        text="选择文件夹",
+                        icon=ft.Icons.FOLDER_OPEN_ROUNDED,
+                        style=ft.ButtonStyle(
+                            shape=ft.RoundedRectangleBorder(radius=8),
+                            padding=ft.padding.all(10),
+                        ),
+                        on_click=lambda _: directory_picker.get_directory_path(),
+                        width=150  # 设置固定宽度
+                    ),
+                ],
+                spacing=5,  # 按钮之间的垂直间距
+                alignment=ft.MainAxisAlignment.START,
+            )
+
             # 创建一个Container来包装ListView，设置背景色和边框
             selected_files_text = ft.ListView(
-                expand=False,
-                height=120,  # 稍微减小文件列表的高度
-                spacing=2,
+                expand=True,  # 允许列表扩展
+                height=120,  # 增加文件列表的高度
+                spacing=1,
                 auto_scroll=True,
                 controls=[
                     ft.Text(
@@ -460,8 +506,8 @@ class TDLDownloaderApp:
                 bgcolor=ft.Colors.BLUE_50,
                 border=ft.border.all(1, ft.Colors.BLUE_200),
                 border_radius=8,
-                padding=10,
-                height=140  # 相应调整容器高度
+                padding=5,
+                expand=True  # 允许容器扩展
             )
 
             def update_selected_files_text(files):
@@ -558,36 +604,6 @@ class TDLDownloaderApp:
             # 添加到页面
             page.overlay.extend([file_picker_single, file_picker_multiple, directory_picker])
             
-            # 调整文件选择卡片的间距
-            file_picker_buttons = ft.Row(
-                [
-                    ft.ElevatedButton(
-                        text="选择单个文件",
-                        icon=ft.Icons.FILE_UPLOAD_ROUNDED,
-                        style=button_style,
-                        on_click=lambda _: file_picker_single.pick_files(
-                            allow_multiple=False
-                        )
-                    ),
-                    ft.ElevatedButton(
-                        text="选择多个文件",
-                        icon=ft.Icons.UPLOAD_FILE_ROUNDED,
-                        style=button_style,
-                        on_click=lambda _: file_picker_multiple.pick_files(
-                            allow_multiple=True
-                        )
-                    ),
-                    ft.ElevatedButton(
-                        text="选择文件夹",
-                        icon=ft.Icons.FOLDER_OPEN_ROUNDED,
-                        style=button_style,
-                        on_click=lambda _: directory_picker.get_directory_path()
-                    ),
-                ],
-                spacing=10,
-                alignment=ft.MainAxisAlignment.CENTER,  # 居中对齐按钮组
-            )
-
             # 上传配置
             chat_field = ft.TextField(
                 label="目标聊天",
@@ -756,16 +772,33 @@ class TDLDownloaderApp:
                                                     ]
                                                 ),
                                                 ft.Divider(height=1, thickness=1, color=ft.Colors.BLACK12),
-                                                file_picker_buttons,
-                                                ft.Container(height=10),
-                                                ft.Text("已选择的文件:", style=normal_text_style),
-                                selected_files_container,  # 使用container而不是直接使用ListView
+                                                ft.Row(
+                                                    [
+                                                        # 左侧按钮区域
+                                                        ft.Container(
+                                                            content=file_picker_buttons,
+                                                            padding=ft.padding.only(right=10)
+                                                        ),
+                                                        # 右侧文件列表区域
+                                                        ft.Column([
+                                                            ft.Text("已选择的文件:", style=normal_text_style),
+                                                            selected_files_container,
+                                                        ], 
+                                                        expand=True
+                                                        ),
+                                                    ],
+                                                    spacing=5,
+                                                    expand=True
+                                                ),
                                             ]),
-                                            padding=15
+                                            padding=5
                                         ),
                                         elevation=2,
                                         surface_tint_color=ft.Colors.WHITE
                                     ),
+                                    
+                                    # 添加间距容器
+                                    ft.Container(height=10),
                                     
                                     # 调整上传设置卡片的间距
                                     ft.Card(
@@ -778,28 +811,28 @@ class TDLDownloaderApp:
                                                     ]
                                                 ),
                                                 ft.Divider(height=1, thickness=1, color=ft.Colors.BLACK12),
-                                                ft.Container(height=5),  # 减小顶部间距
+                                                ft.Container(height=2),  # 进一步减小间距
                                                 ft.Row(
                                                     [chat_field],
-                                                    spacing=10
+                                                    spacing=5
                                                 ),
-                                                ft.Container(height=5),  # 减小间距
+                                                ft.Container(height=2),  # 进一步减小间距
                                                 ft.Row(
                                                     [threads_field, concurrent_field],
-                                                    spacing=10
+                                                    spacing=5
                                                 ),
-                                                ft.Container(height=5),  # 减小间距
+                                                ft.Container(height=2),  # 进一步减小间距
                                                 ft.Row(
                                                     [upload_as_photo, delete_after_upload],
-                                                    spacing=10
+                                                    spacing=5
                                                 ),
-                                                ft.Container(height=10),  # 减小间距
+                                                ft.Container(height=2),  # 进一步减小间距
                                                 upload_button,
                                             ]),
-                                            padding=15
+                                            padding=5  # 进一步减小内边距
                                         ),
                                         elevation=2,
-                                        margin=ft.margin.only(top=15),
+                                        margin=ft.margin.only(top=5),  # 进一步减小卡片间距
                                         surface_tint_color=ft.Colors.WHITE
                                     ),
                                 ],
@@ -904,44 +937,106 @@ class TDLDownloaderApp:
             return upload_tab
 
         # 创建标签页
-        tabs = ft.Tabs(
-            selected_index=0,
-            animation_duration=300,
-            tabs=[
-                ft.Tab(
-                    text="下载",
-                    icon=ft.Icons.CLOUD_DOWNLOAD_ROUNDED,
-                    content=create_download_tab()
-                ),
-                ft.Tab(
-                    text="上传",
-                    icon=ft.Icons.CLOUD_UPLOAD_ROUNDED,
-                    content=create_upload_tab()
-                ),
-            ],
+        tabs = ft.Container(
+            content=ft.Stack(
+                [
+                    ft.Container(
+                        content=create_download_tab(),
+                        visible=True
+                    ),
+                    ft.Container(
+                        content=create_upload_tab(),
+                        visible=False
+                    )
+                ],
+                expand=True
+            ),
             expand=True
         )
+
+        def switch_tab(e, index):
+            """切换标签页"""
+            # 更新内容可见性
+            tab_contents = tabs.content.controls
+            for i, tab in enumerate(tab_contents):
+                tab.visible = (i == index)
+            tabs.update()
+            
+            # 更新按钮样式
+            buttons = e.control.parent.controls
+            for i, button in enumerate(buttons):
+                button.style.bgcolor = {
+                    "": ft.Colors.BLUE if i == index else ft.Colors.BLUE_100,
+                    "hovered": ft.Colors.BLUE_700,
+                }
+                button.update()
 
         # 构建主界面
         page.add(
             ft.Container(
                 content=ft.Column(
                     [
-                        # 标题栏
+                        # 顶部区域 - 包含标题和标签页按钮
                         ft.Container(
-                            content=ft.Row(
-                                [
-                                    ft.Icon(ft.Icons.CLOUD_SYNC_ROUNDED, size=28, color=ft.Colors.BLUE_500),
-                                    ft.Text("TDL下载器", style=title_style),
-                                    ft.Container(expand=True),
-                                    self.status_text
-                                ],
-                                alignment=ft.MainAxisAlignment.START
-                            ),
-                            padding=ft.padding.only(bottom=15)
+                            content=ft.Column([
+                                # 标题栏
+                                ft.Container(
+                                    content=ft.Row(
+                                        [
+                                            ft.Icon(ft.Icons.CLOUD_SYNC_ROUNDED, size=28, color=ft.Colors.BLUE_500),
+                                            ft.Text("TDL下载器", style=title_style),
+                                            ft.Container(expand=True),
+                                            ft.Row(
+                                                [
+                                                    ft.ElevatedButton(
+                                                        text="下载",
+                                                        icon=ft.Icons.CLOUD_DOWNLOAD_ROUNDED,
+                                                        style=ft.ButtonStyle(
+                                                            shape=ft.RoundedRectangleBorder(radius=8),
+                                                            padding=ft.padding.all(15),
+                                                            bgcolor={
+                                                                "": ft.Colors.BLUE,
+                                                                "hovered": ft.Colors.BLUE_700,
+                                                            },
+                                                            color=ft.Colors.WHITE,
+                                                        ),
+                                                        on_click=lambda e: switch_tab(e, 0),
+                                                    ),
+                                                    ft.ElevatedButton(
+                                                        text="上传",
+                                                        icon=ft.Icons.CLOUD_UPLOAD_ROUNDED,
+                                                        style=ft.ButtonStyle(
+                                                            shape=ft.RoundedRectangleBorder(radius=8),
+                                                            padding=ft.padding.all(15),
+                                                            bgcolor={
+                                                                "": ft.Colors.BLUE_100,
+                                                                "hovered": ft.Colors.BLUE_700,
+                                                            },
+                                                            color=ft.Colors.WHITE,
+                                                        ),
+                                                        on_click=lambda e: switch_tab(e, 1),
+                                                    ),
+                                                ],
+                                                spacing=10,
+                                            ),
+                                        ],
+                                        alignment=ft.MainAxisAlignment.START,
+                                        spacing=10,
+                                    ),
+                                    padding=ft.padding.only(bottom=10)
+                                ),
+                            ]),
+                            bgcolor=ft.Colors.BLUE_50,
+                            padding=15,
+                            border_radius=ft.border_radius.only(bottom_left=10, bottom_right=10)
                         ),
-                        # 标签页
-                        tabs,
+                        
+                        # 主要内容区域
+                        ft.Container(
+                            content=tabs,
+                            expand=True,
+                            padding=ft.padding.only(top=15)
+                        ),
                     ],
                     expand=True
                 ),
