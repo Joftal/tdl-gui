@@ -5,3 +5,6 @@
 - 将 `tdl.exe` 和当前 GUI 程序放在同一个目录下。
 - 登录操作、环境设置、代理设置等仍通过原有的 CMD 指令执行。
 - 登录成功后，即可使用 GUI 进行下载或上传操作。
+![alt text](image.png)
+
+![alt text](image-1.png)
