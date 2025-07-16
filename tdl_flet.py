@@ -15,13 +15,30 @@ class TDLDownloaderApp:
         # 获取系统默认编码
         self.system_encoding = locale.getpreferredencoding()
         
+        # 初始化网络速度显示相关的属性
+        self.download_speed_text = ft.Text("0 B/s", style=ft.TextStyle(
+            size=14,
+            weight=ft.FontWeight.W_400,
+            color=ft.Colors.GREEN_400
+        ))
+        self.upload_speed_text = ft.Text("0 B/s", style=ft.TextStyle(
+            size=14,
+            weight=ft.FontWeight.W_400,
+            color=ft.Colors.GREEN_400
+        ))
+        self.current_download_speed = "0 B/s"
+        self.current_upload_speed = "0 B/s"
+        
         # 初始化下载目录
         if getattr(sys, 'frozen', False):
-            # 如果是打包后的程序
-            base_path = os.path.dirname(sys.executable)
+            # 如果是打包后的程序，使用程序所在目录
+            base_path = os.path.dirname(os.path.abspath(sys.executable))
         else:
-            # 如果是开发环境
+            # 如果是开发环境，使用脚本所在目录
             base_path = os.path.dirname(os.path.abspath(__file__))
+        
+        # 保存基础路径
+        self.base_path = base_path
         
         self.downloads_dir = os.path.join(base_path, "downloads")
         os.makedirs(self.downloads_dir, exist_ok=True)
@@ -40,10 +57,10 @@ class TDLDownloaderApp:
         
         # 获取tdl.exe的完整路径
         if getattr(sys, 'frozen', False):
-            # 如果是打包后的程序
+            # 如果是打包后的程序，使用程序所在目录
             self.tdl_path = os.path.join(base_path, "tdl.exe")
         else:
-            # 如果是开发环境
+            # 如果是开发环境，使用脚本所在目录
             self.tdl_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tdl.exe")
 
         # 初始化上传相关的变量
@@ -368,6 +385,14 @@ class TDLDownloaderApp:
                                                     [
                                                         ft.Icon(ft.Icons.TRENDING_DOWN_ROUNDED, color=ft.Colors.PURPLE_400),
                                                         ft.Text("下载进度", style=subtitle_style),
+                                                        ft.Container(expand=True),
+                                                        ft.Text("网络速度:", style=ft.TextStyle(
+                                                            size=14,
+                                                            weight=ft.FontWeight.W_400,
+                                                            color=ft.Colors.GREY_700
+                                                        )),
+                                                        ft.Icon(ft.Icons.ARROW_DOWNWARD_ROUNDED, color=ft.Colors.GREEN_400),
+                                                        self.download_speed_text
                                                     ]
                                                 ),
                                                 ft.Divider(height=1, thickness=1, color=ft.Colors.BLACK12),
@@ -900,6 +925,14 @@ class TDLDownloaderApp:
                                                     [
                                                         ft.Icon(ft.Icons.TRENDING_UP_ROUNDED, color=ft.Colors.PURPLE_400),
                                                         ft.Text("上传进度", style=subtitle_style),
+                                                        ft.Container(expand=True),
+                                                        ft.Text("网络速度:", style=ft.TextStyle(
+                                                            size=14,
+                                                            weight=ft.FontWeight.W_400,
+                                                            color=ft.Colors.GREY_700
+                                                        )),
+                                                        ft.Icon(ft.Icons.ARROW_UPWARD_ROUNDED, color=ft.Colors.GREEN_400),
+                                                        self.upload_speed_text
                                                     ]
                                                 ),
                                                 ft.Divider(height=1, thickness=1, color=ft.Colors.BLACK12),
@@ -1319,7 +1352,7 @@ class TDLDownloaderApp:
                 self.add_log(f"添加下载命令: {dl_cmd}")
             
             # 创建临时批处理文件
-            batch_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tdl_download.bat")
+            batch_file = os.path.join(self.base_path, "tdl_download.bat")
             with open(batch_file, "w", encoding="utf-8") as f:
                 f.write(batch_content)
             
@@ -1374,6 +1407,10 @@ class TDLDownloaderApp:
                         
                         # 检测我们的特殊标记
                         if "[TDLGUI_MARKER] 开始下载" in line:
+                            # 重置速度计算变量
+                            last_bytes = 0
+                            last_time = time.time()
+                            self.update_network_speed(0, True)
                             match = re.search(r'开始下载 (\d+)/(\d+): (.+)$', line)
                             if match:
                                 current_file_index = int(match.group(1)) - 1
@@ -1390,6 +1427,8 @@ class TDLDownloaderApp:
                                 last_progress = 0
                         
                         elif "[TDLGUI_MARKER] 完成下载" in line:
+                            # 重置速度显示
+                            self.update_network_speed(0, True)
                             completed_files += 1
                             is_downloading = False
                             if current_progress_line:
@@ -1401,8 +1440,26 @@ class TDLDownloaderApp:
                             self.update_progress(total_value=total_progress)
                             last_progress = 100
                         
-                        # 如果正在下载，尝试从输出中解析进度
+                        # 如果正在下载，尝试从输出中解析进度和速度
                         elif is_downloading:
+                            # 尝试解析速度信息
+                            speed_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMGT]?B)/s', line, re.IGNORECASE)
+                            if speed_match:
+                                value = float(speed_match.group(1))
+                                unit = speed_match.group(2).upper()
+                                
+                                # 转换为字节每秒
+                                multiplier = {
+                                    'B': 1,
+                                    'KB': 1024,
+                                    'MB': 1024 * 1024,
+                                    'GB': 1024 * 1024 * 1024,
+                                    'TB': 1024 * 1024 * 1024 * 1024
+                                }.get(unit, 1)
+                                
+                                speed_in_bytes = value * multiplier
+                                self.update_network_speed(speed_in_bytes, True)
+                            
                             progress_match = re.search(r'(\d+\.\d+)%', line)
                             if progress_match and current_progress_line:
                                 file_progress = float(progress_match.group(1))
@@ -1564,8 +1621,44 @@ class TDLDownloaderApp:
             size_in_bytes /= 1024.0
         return f"{size_in_bytes:.2f} PB"
 
+    def _format_speed(self, bytes_per_second):
+        """格式化网络速度显示"""
+        if bytes_per_second < 1024:
+            return f"{bytes_per_second:.1f} B/s"
+        elif bytes_per_second < 1024 * 1024:
+            return f"{bytes_per_second/1024:.1f} KB/s"
+        elif bytes_per_second < 1024 * 1024 * 1024:
+            return f"{bytes_per_second/(1024*1024):.1f} MB/s"
+        else:
+            return f"{bytes_per_second/(1024*1024*1024):.1f} GB/s"
+
+    def update_network_speed(self, speed, is_download=True):
+        """更新网络速度显示
+        Args:
+            speed: 速度（字节/秒）
+            is_download: 是否为下载速度
+        """
+        try:
+            formatted_speed = self._format_speed(speed)
+            if is_download:
+                self.current_download_speed = formatted_speed
+                if self.download_speed_text:
+                    self.download_speed_text.value = formatted_speed
+                    self.download_speed_text.update()
+            else:
+                self.current_upload_speed = formatted_speed
+                if self.upload_speed_text:
+                    self.upload_speed_text.value = formatted_speed
+                    self.upload_speed_text.update()
+        except Exception as e:
+            print(f"更新网络速度显示时出错: {str(e)}")
+
     def _upload_thread(self, files, chat, threads, concurrent, as_photo, delete_after, page):
         try:
+            # 初始化变量
+            last_bytes = 0
+            last_time = time.time()
+            
             #print("开始上传...")  # 调试输出
             
             # 重置进度条和提示文本
@@ -1598,7 +1691,7 @@ class TDLDownloaderApp:
                 self.add_upload_log(f"添加上传命令: {up_cmd}")
             
             # 创建临时批处理文件
-            batch_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tdl_upload.bat")
+            batch_file = os.path.join(self.base_path, "tdl_upload.bat")
             with open(batch_file, "w", encoding="utf-8") as f:
                 f.write(batch_content)
             
@@ -1653,6 +1746,10 @@ class TDLDownloaderApp:
                         
                         # 检测我们的特殊标记
                         if "[TDLGUI_MARKER] 开始上传" in line:
+                            # 重置速度计算变量
+                            last_bytes = 0
+                            last_time = time.time()
+                            self.update_network_speed(0, False)
                             match = re.search(r'开始上传 (\d+)/(\d+): (.+)$', line)
                             if match:
                                 current_file_index = int(match.group(1)) - 1
@@ -1669,6 +1766,8 @@ class TDLDownloaderApp:
                                 last_progress = 0
                         
                         elif "[TDLGUI_MARKER] 完成上传" in line:
+                            # 重置速度显示
+                            self.update_network_speed(0, False)
                             completed_files += 1
                             is_uploading = False
                             if current_progress_line:
@@ -1680,8 +1779,26 @@ class TDLDownloaderApp:
                             self.update_upload_progress(total_value=total_progress)
                             last_progress = 100
                         
-                        # 如果正在上传，尝试从输出中解析进度
+                        # 如果正在上传，尝试从输出中解析进度和速度
                         elif is_uploading:
+                            # 尝试解析速度信息
+                            speed_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMGT]?B)/s', line, re.IGNORECASE)
+                            if speed_match:
+                                value = float(speed_match.group(1))
+                                unit = speed_match.group(2).upper()
+                                
+                                # 转换为字节每秒
+                                multiplier = {
+                                    'B': 1,
+                                    'KB': 1024,
+                                    'MB': 1024 * 1024,
+                                    'GB': 1024 * 1024 * 1024,
+                                    'TB': 1024 * 1024 * 1024 * 1024
+                                }.get(unit, 1)
+                                
+                                speed_in_bytes = value * multiplier
+                                self.update_network_speed(speed_in_bytes, False)
+                            
                             progress_match = re.search(r'(\d+\.\d+)%', line)
                             if progress_match and current_progress_line:
                                 file_progress = float(progress_match.group(1))
