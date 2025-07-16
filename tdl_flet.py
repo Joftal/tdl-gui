@@ -29,6 +29,9 @@ class TDLDownloaderApp:
         # 存储正在运行的进程
         self.running_processes = []
         
+        # 存储下载链接和文件名的映射关系
+        self.download_links_map = {}
+        
         # 环境变量
         self.env_vars = {
             "TDL_NS": "quickstart",
@@ -87,7 +90,11 @@ class TDLDownloaderApp:
             weight=ft.FontWeight.W_400,
             color=ft.Colors.GREY_900
         )
-        
+
+        # 创建状态文本控件
+        # 将状态文本添加到页面
+        # page.add(self.status_text) # This line is removed
+
         # 按钮样式
         button_style = ft.ButtonStyle(
             shape=ft.RoundedRectangleBorder(radius=8),
@@ -144,7 +151,9 @@ class TDLDownloaderApp:
                 page.update()
             
             # 状态栏
-            self.status_text = ft.Text("就绪", color=ft.Colors.BLUE, style=normal_text_style)
+            # self.status_text.value = "就绪" # This line is removed
+            # self.status_text.color = ft.Colors.BLUE # This line is removed
+            # self.status_text.update() # This line is removed
             
             # 环境变量设置
             ns_field = ft.TextField(
@@ -171,7 +180,7 @@ class TDLDownloaderApp:
                 
                 self.env_vars["TDL_NS"] = ns
                 self.add_log(f"设置环境变量: TDL_NS={ns}")
-                self.status_text.value = f"命名空间已设置为: {ns}"
+                # self.status_text.value = f"命名空间已设置为: {ns}" # This line is removed
                 self.show_snackbar(page, f"命名空间已设置为: {ns}")
                 page.update()
             
@@ -183,7 +192,7 @@ class TDLDownloaderApp:
                 
                 self.env_vars["TDL_PROXY"] = proxy
                 self.add_log(f"设置环境变量: TDL_PROXY={proxy}")
-                self.status_text.value = f"代理已设置为: {proxy}"
+                # self.status_text.value = f"代理已设置为: {proxy}" # This line is removed
                 self.show_snackbar(page, f"代理已设置为: {proxy}")
                 page.update()
             
@@ -523,12 +532,20 @@ class TDLDownloaderApp:
                     )
                 else:
                     for file in files:
+                        # 创建一个容器来包装每个文件名
                         selected_files_text.controls.append(
-                            ft.Text(
-                                f"• {file.name}",
-                                style=normal_text_style,
-                                size=14,
-                                color=ft.Colors.GREY_700
+                            ft.Container(
+                                content=ft.Text(
+                                    f"• {file.name}",
+                                    style=normal_text_style,
+                                    size=14,
+                                    color=ft.Colors.GREY_700,
+                                    selectable=True,  # 允许选择文本
+                                    no_wrap=False,  # 允许文本换行
+                                    text_align=ft.TextAlign.LEFT,  # 左对齐
+                                ),
+                                padding=ft.padding.symmetric(vertical=2, horizontal=5),
+                                expand=True  # 允许容器扩展以适应父容器宽度
                             )
                         )
                 # 只有当ListView已经被添加到页面时才更新
@@ -545,6 +562,9 @@ class TDLDownloaderApp:
                         update_selected_files_text(e.files)
                         upload_button.disabled = False
                         upload_button.update()
+                        # 清除上传完成提示
+                        self.upload_complete_text.visible = False
+                        self.upload_complete_text.update()
                         self.add_upload_log(f"已选择 {len(e.files)} 个文件")
                 except Exception as ex:
                     print(f"选择文件时出错: {str(ex)}")
@@ -571,11 +591,18 @@ class TDLDownloaderApp:
                                 parts = file.name.split(os.sep)
                                 indent = "  " * (len(parts) - 1)
                                 selected_files_text.controls.append(
-                                    ft.Text(
-                                        f"{indent}• {parts[-1]}",
-                                        style=normal_text_style,
-                                        size=14,
-                                        color=ft.Colors.GREY_700
+                                    ft.Container(
+                                        content=ft.Text(
+                                            f"{indent}• {parts[-1]}",
+                                            style=normal_text_style,
+                                            size=14,
+                                            color=ft.Colors.GREY_700,
+                                            selectable=True,  # 允许选择文本
+                                            no_wrap=False,  # 允许文本换行
+                                            text_align=ft.TextAlign.LEFT,  # 左对齐
+                                        ),
+                                        padding=ft.padding.symmetric(vertical=2, horizontal=5),
+                                        expand=True  # 允许容器扩展以适应父容器宽度
                                     )
                                 )
                             selected_files_text.update()
@@ -587,7 +614,6 @@ class TDLDownloaderApp:
                             self.add_upload_log("所选文件夹为空")
                             self.show_snackbar(page, "所选文件夹为空")
                 except Exception as ex:
-                    print(f"选择文件夹时出错: {str(ex)}")
                     self.add_upload_log(f"选择文件夹时出错: {str(ex)}")
             
             # 创建文件选择器
@@ -679,7 +705,7 @@ class TDLDownloaderApp:
             
             def start_upload(e):
                 try:
-                    print("开始上传...")  # 调试输出
+                    #print("开始上传...")  # 调试输出
                     if not self.selected_files:
                         self.show_snackbar(page, "请先选择要上传的文件")
                         return
@@ -732,7 +758,7 @@ class TDLDownloaderApp:
                     upload_button.disabled = False
                     upload_button.update()
             
-            # 创建上传按钮
+            # 创建上传按钮和提示文本
             upload_button = ft.ElevatedButton(
                 text="开始上传",
                 icon=ft.Icons.CLOUD_UPLOAD_ROUNDED,
@@ -740,6 +766,25 @@ class TDLDownloaderApp:
                 on_click=start_upload,
                 disabled=True,
                 expand=1
+            )
+
+            # 添加上传完成提示文本
+            self.upload_complete_text = ft.Text(
+                value="",
+                color=ft.Colors.GREEN,
+                size=14,
+                weight=ft.FontWeight.W_500,
+                visible=False  # 初始时不可见
+            )
+
+            # 将按钮和提示文本放在同一行
+            upload_button_row = ft.Row(
+                [
+                    upload_button,
+                    self.upload_complete_text
+                ],
+                spacing=10,
+                alignment=ft.MainAxisAlignment.START
             )
             
             # 清空日志按钮
@@ -827,7 +872,7 @@ class TDLDownloaderApp:
                                                     spacing=5
                                                 ),
                                                 ft.Container(height=2),  # 进一步减小间距
-                                                upload_button,
+                                                upload_button_row,  # 使用包含按钮和提示文本的行
                                             ]),
                                             padding=5  # 进一步减小内边距
                                         ),
@@ -1179,18 +1224,22 @@ class TDLDownloaderApp:
         """开始下载"""
         try:
             # 获取下载链接
-            # 在新的左右布局中，找到链接输入框
             links_field = None
             # 遍历页面寻找链接输入框
             for control in e.page.controls:
                 if isinstance(control, ft.Container):
-                    tabs = control.content.controls[1]  # 获取标签页控件
-                    if isinstance(tabs, ft.Tabs):
-                        download_tab = tabs.tabs[0].content  # 获取下载标签页内容
-                        left_panel = download_tab.content.controls[0]  # 获取左侧面板
-                        download_card = left_panel.content.controls[1]  # 获取下载设置卡片
-                        links_field = download_card.content.content.controls[2]  # 获取链接输入框
-                        break
+                    content_column = control.content
+                    if isinstance(content_column, ft.Column):
+                        main_content = content_column.controls[1]  # 获取主要内容区域
+                        if isinstance(main_content, ft.Container):
+                            stack = main_content.content.content  # 获取Stack控件
+                            if isinstance(stack, ft.Stack):
+                                download_tab = stack.controls[0]  # 获取下载标签页
+                                if download_tab.visible:  # 确保是当前可见的标签页
+                                    left_panel = download_tab.content.content.controls[0]  # 获取左侧面板
+                                    download_card = left_panel.content.controls[1]  # 获取下载设置卡片
+                                    links_field = download_card.content.content.controls[2].content  # 获取链接输入框
+                                    break
             
             if not links_field:
                 raise Exception("无法找到链接输入框")
@@ -1207,13 +1256,18 @@ class TDLDownloaderApp:
             download_button = None
             for control in e.page.controls:
                 if isinstance(control, ft.Container):
-                    tabs = control.content.controls[1]  # 获取标签页控件
-                    if isinstance(tabs, ft.Tabs):
-                        download_tab = tabs.tabs[0].content  # 获取下载标签页内容
-                        left_panel = download_tab.content.controls[0]  # 获取左侧面板
-                        download_card = left_panel.content.controls[1]  # 获取下载设置卡片
-                        download_button = download_card.content.content.controls[3].controls[0]  # 获取下载按钮
-                        break
+                    content_column = control.content
+                    if isinstance(content_column, ft.Column):
+                        main_content = content_column.controls[1]  # 获取主要内容区域
+                        if isinstance(main_content, ft.Container):
+                            stack = main_content.content.content  # 获取Stack控件
+                            if isinstance(stack, ft.Stack):
+                                download_tab = stack.controls[0]  # 获取下载标签页
+                                if download_tab.visible:  # 确保是当前可见的标签页
+                                    left_panel = download_tab.content.content.controls[0]  # 获取左侧面板
+                                    download_card = left_panel.content.controls[1]  # 获取下载设置卡片
+                                    download_button = download_card.content.content.controls[3].controls[0]  # 获取下载按钮
+                                    break
             
             if download_button:
                 download_button.disabled = True
@@ -1231,9 +1285,15 @@ class TDLDownloaderApp:
     
     def _download_thread(self, links, page):
         try:
-            self.status_text.value = "正在下载..."
-            self.status_text.color = ft.Colors.ORANGE
-            self.status_text.update()
+            # 保存链接和文件名的映射关系
+            self.download_links_map.clear()  # 清除旧的映射
+            for link in links:
+                # 从链接中提取文件名
+                filename = link.split('/')[-1].split('?')[0]
+                self.download_links_map[filename] = link
+                self.add_log(f"记录文件映射: {filename} -> {link}")
+
+            print("开始下载...")  # 调试输出
             self.add_log(f"下载保存目录: {self.downloads_dir}")
             
             # 重置进度条
@@ -1368,6 +1428,9 @@ class TDLDownloaderApp:
             except:
                 self.add_log("无法删除临时批处理文件")
             
+            # 检查临时文件
+            self.check_temp_files()
+            
             return_code = process.poll()
             if return_code == 0:
                 self.add_log("所有链接下载成功!")
@@ -1382,17 +1445,11 @@ class TDLDownloaderApp:
             
             # 完成所有下载
             self.update_progress(current_value=100, total_value=100, text="下载完成")
-            self.status_text.value = "下载完成"
-            self.status_text.color = ft.Colors.GREEN
-            self.status_text.update()
             self.add_log("所有下载任务已完成")
             self.add_log(f"下载文件保存在: {self.downloads_dir}")
             self.add_log("您可以点击「打开下载文件夹」按钮查看下载的文件")
                 
         except Exception as e:
-            self.status_text.value = f"错误: {str(e)}"
-            self.status_text.color = ft.Colors.RED
-            self.status_text.update()
             self.add_log(f"发生错误: {str(e)}")
             self.show_snackbar(page, f"发生错误: {str(e)}")
         finally:
@@ -1401,13 +1458,18 @@ class TDLDownloaderApp:
                 download_button = None
                 for control in page.controls:
                     if isinstance(control, ft.Container):
-                        tabs = control.content.controls[1]  # 获取标签页控件
-                        if isinstance(tabs, ft.Tabs):
-                            download_tab = tabs.tabs[0].content  # 获取下载标签页内容
-                            left_panel = download_tab.content.controls[0]  # 获取左侧面板
-                            download_card = left_panel.content.controls[1]  # 获取下载设置卡片
-                            download_button = download_card.content.content.controls[3].controls[0]  # 获取下载按钮
-                            break
+                        content_column = control.content
+                        if isinstance(content_column, ft.Column):
+                            main_content = content_column.controls[1]  # 获取主要内容区域
+                            if isinstance(main_content, ft.Container):
+                                stack = main_content.content.content  # 获取Stack控件
+                                if isinstance(stack, ft.Stack):
+                                    download_tab = stack.controls[0]  # 获取下载标签页
+                                    if download_tab.visible:  # 确保是当前可见的标签页
+                                        left_panel = download_tab.content.content.controls[0]  # 获取左侧面板
+                                        download_card = left_panel.content.controls[1]  # 获取下载设置卡片
+                                        download_button = download_card.content.content.controls[3].controls[0]  # 获取下载按钮
+                                        break
                 
                 if download_button:
                     download_button.disabled = False
@@ -1417,15 +1479,100 @@ class TDLDownloaderApp:
             except Exception as e:
                 print(f"重新启用下载按钮时出错: {str(e)}")
 
+    def check_temp_files(self):
+        """检查并处理临时文件"""
+        try:
+            self.add_log("\n开始检查临时文件...")
+            temp_files = [f for f in os.listdir(self.downloads_dir) if f.endswith('.tmp')]
+            
+            if not temp_files:
+                self.add_log("未发现临时文件")
+                return
+            
+            self.add_log(f"发现 {len(temp_files)} 个临时文件，开始处理...")
+            
+            # 创建结果记录文件
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            result_file = os.path.join(self.downloads_dir, f"temp_files_process_{timestamp}.txt")
+            
+            # 用于记录处理结果的列表
+            process_results = []
+            process_results.append(f"临时文件处理记录 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            process_results.append(f"发现 {len(temp_files)} 个临时文件\n")
+            
+            for temp_file in temp_files:
+                temp_path = os.path.join(self.downloads_dir, temp_file)
+                file_size = os.path.getsize(temp_path)
+                
+                if file_size > 0:
+                    try:
+                        # 获取不带.tmp的文件名
+                        original_filename = temp_file[:-4]  # 移除.tmp后缀
+                        new_path = os.path.join(self.downloads_dir, original_filename)
+                        
+                        # 重命名文件
+                        os.rename(temp_path, new_path)
+                        
+                        # 查找并记录对应的下载链接
+                        original_link = None
+                        for filename, link in self.download_links_map.items():
+                            if filename in original_filename:  # 使用in而不是完全匹配，因为文件名可能有额外的数字等
+                                original_link = link
+                                break
+                        
+                        # 记录处理结果
+                        result_entry = f"文件: {temp_file} -> {original_filename}"
+                        if original_link:
+                            result_entry += f"\n下载链接: {original_link}"
+                            self.add_log(f"已恢复临时文件: {temp_file} -> {original_filename}")
+                            self.add_log(f"对应的下载链接: {original_link}")
+                        else:
+                            result_entry += "\n下载链接: 未找到对应链接"
+                            self.add_log(f"已恢复临时文件: {temp_file} -> {original_filename}")
+                            self.add_log("无法找到对应的下载链接")
+                        
+                        result_entry += f"\n文件大小: {self._format_file_size(file_size)}\n"
+                        process_results.append(result_entry)
+                        
+                    except Exception as e:
+                        error_msg = f"处理临时文件 {temp_file} 时出错: {str(e)}"
+                        self.add_log(error_msg)
+                        process_results.append(f"错误: {error_msg}\n")
+                else:
+                    skip_msg = f"跳过空临时文件: {temp_file}"
+                    self.add_log(skip_msg)
+                    process_results.append(f"{skip_msg}\n")
+            
+            # 写入处理结果到文件
+            try:
+                with open(result_file, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(process_results))
+                self.add_log(f"处理结果已保存到文件: {result_file}")
+            except Exception as e:
+                self.add_log(f"保存处理结果到文件时出错: {str(e)}")
+            
+            self.add_log("临时文件处理完成\n")
+            
+        except Exception as e:
+            self.add_log(f"检查临时文件时出错: {str(e)}")
+    
+    def _format_file_size(self, size_in_bytes):
+        """格式化文件大小显示"""
+        for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+            if size_in_bytes < 1024.0:
+                return f"{size_in_bytes:.2f} {unit}"
+            size_in_bytes /= 1024.0
+        return f"{size_in_bytes:.2f} PB"
+
     def _upload_thread(self, files, chat, threads, concurrent, as_photo, delete_after, page):
         try:
-            self.status_text.value = "正在上传..."
-            self.status_text.color = ft.Colors.ORANGE
-            self.status_text.update()
+            #print("开始上传...")  # 调试输出
             
-            # 重置进度条
+            # 重置进度条和提示文本
             self.update_upload_progress(current_value=0, total_value=0, text="准备上传")
-            
+            self.upload_complete_text.visible = False
+            self.upload_complete_text.update()
+
             # 创建批处理文件内容
             batch_content = "@echo off\n"
             batch_content += "chcp 65001\n"  # 设置CMD编码为UTF-8
@@ -1574,15 +1721,14 @@ class TDLDownloaderApp:
             
             # 完成所有上传
             self.update_upload_progress(current_value=100, total_value=100, text="上传完成")
-            self.status_text.value = "上传完成"
-            self.status_text.color = ft.Colors.GREEN
-            self.status_text.update()
             self.add_upload_log("所有上传任务已完成")
+            
+            # 显示完成提示
+            self.upload_complete_text.value = "上传已完成，继续上传请重新选择文件"
+            self.upload_complete_text.visible = True
+            self.upload_complete_text.update()
                 
         except Exception as e:
-            self.status_text.value = f"错误: {str(e)}"
-            self.status_text.color = ft.Colors.RED
-            self.status_text.update()
             self.add_upload_log(f"发生错误: {str(e)}")
             self.show_snackbar(page, f"发生错误: {str(e)}")
         finally:
@@ -1591,13 +1737,14 @@ class TDLDownloaderApp:
                 tabs = page.controls[0].content.controls[1]  # 获取标签页控件
                 upload_tab = tabs.tabs[1].content  # 获取上传标签页内容
                 upload_settings_card = upload_tab.content.controls[0].content.controls[1]  # 获取上传设置卡片
-                upload_button = upload_settings_card.content.content.controls[-1]  # 获取上传按钮
+                upload_button = upload_settings_card.content.content.controls[-1].controls[0]  # 获取上传按钮
                 
                 # 重新启用按钮
                 upload_button.disabled = False
                 upload_button.update()
             except Exception as e:
-                print(f"重新启用上传按钮时出错: {str(e)}")
+                #print(f"重新启用上传按钮时出错: {str(e)}")
+                pass
 
     def clear_upload_logs(self):
         """清空上传日志"""
