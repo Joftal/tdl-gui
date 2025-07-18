@@ -911,9 +911,7 @@ class TDLDownloaderApp:
                         self.show_snackbar(page, "请先选择要上传的文件")
                         return
                     chat = chat_field.value.strip()
-                    if not chat:
-                        self.show_snackbar(page, "请输入目标聊天")
-                        return
+                    # 允许chat为空，空时上传到收藏
                     try:
                         threads = int(threads_field.value)
                         concurrent = int(concurrent_field.value)
@@ -925,11 +923,10 @@ class TDLDownloaderApp:
                     upload_button.disabled = True
                     upload_button.update()
                     self.add_upload_log("开始上传任务...")
-                    self.add_upload_log(f"目标聊天: {chat}")
+                    self.add_upload_log(f"目标聊天: {chat if chat else '收藏（Saved Messages）'}")
                     self.add_upload_log(f"线程数: {threads}, 并发数: {concurrent}")
                     self.add_upload_log(f"以照片形式上传: {'是' if upload_as_photo.value else '否'}")
                     self.add_upload_log(f"上传后删除: {'是' if delete_after_upload.value else '否'}")
-                    # 启动上传线程，增加多任务参数
                     threading.Thread(
                         target=self._upload_thread,
                         args=(
@@ -940,7 +937,7 @@ class TDLDownloaderApp:
                             upload_as_photo.value,
                             delete_after_upload.value,
                             page,
-                            self.enable_multi_upload  # 新增参数
+                            self.enable_multi_upload
                         ),
                         daemon=True
                     ).start()
@@ -1101,46 +1098,50 @@ class TDLDownloaderApp:
                                     ft.Card(
                                         content=ft.Container(
                                             content=ft.Column([
+                                                # 标题行
                                                 ft.Row(
                                                     [
                                                         ft.Icon(ft.Icons.TRENDING_UP_ROUNDED, color=ft.Colors.PURPLE_400),
-                                                        ft.Text("上传进度", style=subtitle_style),
-                                                        ft.Container(expand=True),
-                                                        ft.Text("网络速度:", style=ft.TextStyle(
-                                                            size=14,
-                                                            weight=ft.FontWeight.W_400,
-                                                            color=ft.Colors.GREY_700
-                                                        )),
-                                                        ft.Icon(ft.Icons.ARROW_UPWARD_ROUNDED, color=ft.Colors.GREEN_400),
-                                                        self.upload_speed_text
+                                                        ft.Text("上传状态", style=subtitle_style),
                                                     ]
                                                 ),
                                                 ft.Divider(height=1, thickness=1, color=ft.Colors.BLACK12),
+                                                # 速度和进度行
                                                 ft.Container(
                                                     content=ft.Column([
-                                                        ft.Row([
-                                                            ft.Icon(ft.Icons.TASK_ALT_ROUNDED, color=ft.Colors.BLUE_400, size=16),
-                                                            ft.Text("当前任务:", style=normal_text_style),
-                                                            self.upload_current_task_text
-                                                        ]),
-                                                        ft.Container(height=3),  # 减小间距
-                                                        ft.Row([
-                                                            ft.Icon(ft.Icons.FILE_UPLOAD_ROUNDED, color=ft.Colors.GREEN_400, size=16),
-                                                            ft.Text("当前文件:", style=normal_text_style),
-                                                            ft.Container(expand=True),
-                                                            self.upload_current_progress_text
-                                                        ]),
-                                                        self.upload_current_progress,
-                                                        ft.Container(height=5),  # 减小间距
-                                                        ft.Row([
-                                                            ft.Icon(ft.Icons.ANALYTICS_ROUNDED, color=ft.Colors.ORANGE_400, size=16),
-                                                            ft.Text("总体进度:", style=normal_text_style, weight=ft.FontWeight.BOLD),
-                                                            ft.Container(expand=True),
-                                                            self.upload_total_progress_text
-                                                        ]),
+                                                        ft.Row(
+                                                            [
+                                                                ft.Row([
+                                                                    ft.Text(
+                                                                        "上传速度：",
+                                                                        style=ft.TextStyle(
+                                                                            size=14,
+                                                                            weight=ft.FontWeight.W_500,
+                                                                            color=ft.Colors.GREY_800
+                                                                        ),
+                                                                    ),
+                                                                    ft.Icon(ft.Icons.SPEED_ROUNDED, color=ft.Colors.GREEN_400, size=16),
+                                                                    self.upload_speed_text,
+                                                                ]),
+                                                                ft.Container(expand=True),
+                                                                ft.Row([
+                                                                    ft.Text(
+                                                                        "上传进度：",
+                                                                        style=ft.TextStyle(
+                                                                            size=14,
+                                                                            weight=ft.FontWeight.W_500,
+                                                                            color=ft.Colors.GREY_800
+                                                                        ),
+                                                                    ),
+                                                                    self.upload_total_progress_text,
+                                                                ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                                                            ],
+                                                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                                                        ),
+                                                        ft.Container(height=10),
                                                         self.upload_total_progress,
                                                     ]),
-                                                    padding=ft.padding.only(top=10, bottom=10)
+                                                    padding=10
                                                 ),
                                             ]),
                                             padding=15
@@ -1962,10 +1963,11 @@ class TDLDownloaderApp:
                 batch_content += f"set {var_name}={var_value}\n"
             total_files = len(files)
             if enable_multi_upload:
-                # 多任务上传：合并所有文件为一个命令
-                up_cmd = f"tdl.exe up -t {threads} -l {concurrent} -c {chat}"
+                up_cmd = f"tdl.exe up -t {threads} -l {concurrent}"
                 for file in files:
                     up_cmd += f" -p \"{file.path}\""
+                if chat:
+                    up_cmd += f" -c {chat}"
                 if as_photo:
                     up_cmd += " --photo"
                 if delete_after:
@@ -1975,9 +1977,10 @@ class TDLDownloaderApp:
                 batch_content += f"echo [TDLGUI_MARKER] 完成上传 1/{total_files}\n"
                 self.add_upload_log(f"添加上传命令: {up_cmd}")
             else:
-                # 单任务上传：每个文件单独命令
                 for i, file in enumerate(files):
-                    up_cmd = f"tdl.exe up -p \"{file.path}\" -c {chat} -t {threads} -l {concurrent}"
+                    up_cmd = f"tdl.exe up -p \"{file.path}\""
+                    if chat:
+                        up_cmd += f" -c {chat}"
                     if as_photo:
                         up_cmd += " --photo"
                     if delete_after:
@@ -2080,58 +2083,64 @@ class TDLDownloaderApp:
                             self.update_upload_progress(total_value=total_progress)
                             last_progress = 100
                         elif is_uploading:
-                            # 多任务上传时，解析整体进度和速度
-                            if enable_multi_upload:
-                                # 解析如 [#####....] [6s; 1.49 MB/s] 这种行
-                                bar_speed_pattern = re.compile(r'\[(#+)([\. ]+)\]\s*\[(\d+)s;\s*([\d\.]+)\s*([KMGT]?B)/s\]', re.I)
-                                match = bar_speed_pattern.search(line)
-                                if match:
-                                    bar_count = len(match.group(1))
-                                    total_count = bar_count + len(match.group(2))
+                            # 单/多任务上传统一刷新逻辑：只在遇到总进度条行时刷新卡片
+                            bar_speed_pattern = re.compile(r'^\[#+[\. ]*\]\s*\[\d+s;\s*[\d\.]+\s*[KMGT]?B/s\]$', re.I)
+                            if bar_speed_pattern.match(line):
+                                # 解析进度和速度
+                                bar_only_pattern = re.compile(r'\[(#+)([\. ]+)\]')
+                                bar_match = bar_only_pattern.search(line)
+                                if bar_match:
+                                    bar_count = len(bar_match.group(1))
+                                    total_count = bar_count + len(bar_match.group(2))
                                     progress = (bar_count / total_count) * 100 if total_count > 0 else 0
-                                    speed_value = float(match.group(4))
-                                    speed_unit = match.group(5).upper()
+                                else:
+                                    progress = None
+                                speed_match = re.search(r'([\d\.]+)\s*([KMGT]?B)/s', line, re.IGNORECASE)
+                                if speed_match:
+                                    value = float(speed_match.group(1))
+                                    unit = speed_match.group(2).upper()
                                     multiplier = {
                                         'B': 1,
                                         'KB': 1024,
                                         'MB': 1024 * 1024,
                                         'GB': 1024 * 1024 * 1024,
                                         'TB': 1024 * 1024 * 1024 * 1024
-                                    }.get(speed_unit, 1)
-                                    speed_in_bytes = speed_value * multiplier
+                                    }.get(unit, 1)
+                                    speed_in_bytes = value * multiplier
                                     self.update_network_speed(speed_in_bytes, False)
-                                    progress_text = f"{current_progress_line.splitlines()[0]}\n{make_progress_bar(progress)}"
-                                    self.add_upload_log(progress_text, replace_last=True)
+                                if progress is not None:
                                     self.update_upload_progress(current_value=progress)
-                                    total_progress = progress
-                                    self.update_upload_progress(total_value=total_progress)
-                                    last_progress = progress
-                                    continue
-                            # 单任务上传原有逻辑
-                            speed_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMGT]?B)/s', line, re.IGNORECASE)
-                            if speed_match:
-                                value = float(speed_match.group(1))
-                                unit = speed_match.group(2).upper()
-                                multiplier = {
-                                    'B': 1,
-                                    'KB': 1024,
-                                    'MB': 1024 * 1024,
-                                    'GB': 1024 * 1024 * 1024,
-                                    'TB': 1024 * 1024 * 1024 * 1024
-                                }.get(unit, 1)
-                                speed_in_bytes = value * multiplier
-                                self.update_network_speed(speed_in_bytes, False)
-                            progress_match = re.search(r'(\d+\.\d+)%', line)
-                            if progress_match and current_progress_line:
-                                file_progress = float(progress_match.group(1))
-                                progress_text = f"{current_progress_line.splitlines()[0]}\n{make_progress_bar(file_progress)}"
-                                self.add_upload_log(progress_text, replace_last=True)
-                                self.update_upload_progress(current_value=file_progress)
-                                total_progress = ((completed_files + file_progress / 100) / total_files) * 100
-                                self.update_upload_progress(total_value=total_progress)
-                                last_progress = file_progress
-                            elif not progress_match and not line.startswith("[TDLGUI_MARKER]"):
-                                self.add_upload_log(line)
+                                    self.update_upload_progress(total_value=progress)
+                                # 只刷新卡片，不进日志
+                                continue
+                            # 其它行只进日志，不刷新卡片
+                            self.add_upload_log(line)
+                            continue
+                        # 单任务上传原有逻辑
+                        speed_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMGT]?B)/s', line, re.IGNORECASE)
+                        if speed_match:
+                            value = float(speed_match.group(1))
+                            unit = speed_match.group(2).upper()
+                            multiplier = {
+                                'B': 1,
+                                'KB': 1024,
+                                'MB': 1024 * 1024,
+                                'GB': 1024 * 1024 * 1024,
+                                'TB': 1024 * 1024 * 1024 * 1024
+                            }.get(unit, 1)
+                            speed_in_bytes = value * multiplier
+                            self.update_network_speed(speed_in_bytes, False)
+                        progress_match = re.search(r'(\d+\.\d+)%', line)
+                        if progress_match and current_progress_line:
+                            file_progress = float(progress_match.group(1))
+                            progress_text = f"{current_progress_line.splitlines()[0]}\n{make_progress_bar(file_progress)}"
+                            self.add_upload_log(progress_text, replace_last=True)
+                            self.update_upload_progress(current_value=file_progress)
+                            total_progress = ((completed_files + file_progress / 100) / total_files) * 100
+                            self.update_upload_progress(total_value=total_progress)
+                            last_progress = file_progress
+                        elif not progress_match and not line.startswith("[TDLGUI_MARKER]"):
+                            self.add_upload_log(line)
                     except Exception as e:
                         self.add_upload_log(f"[日志解析错误: {str(e)}]")
             
@@ -2195,29 +2204,44 @@ class TDLDownloaderApp:
             replace_last: 是否替换最后一行日志
         """
         try:
-            if self.upload_log_view is None:
-                print(f"Upload log: {text}")  # 如果日志视图未初始化，打印到控制台
+            # 处理可能的乱码和控制字符，参考下载日志
+            def decode_bytes(b):
+                import locale, re
+                control_chars_pattern = re.compile(r'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K')
+                if isinstance(b, bytes):
+                    b = control_chars_pattern.sub(b'', b)
+                    try:
+                        return b.decode('utf-8')
+                    except UnicodeDecodeError:
+                        pass
+                    try:
+                        return b.decode('gbk')
+                    except UnicodeDecodeError:
+                        pass
+                    try:
+                        return b.decode(locale.getpreferredencoding())
+                    except UnicodeDecodeError:
+                        pass
+                    return b.decode('utf-8', errors='replace')
+                elif isinstance(b, str):
+                    b = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K', '', b)
+                    return b.encode('utf-8', errors='replace').decode('utf-8')
+                return str(b)
+            text = decode_bytes(text)
+            # 过滤掉系统信息行
+            import re
+            if re.search(r'CPU: \d+\.\d+% Memory: \d+\.\d+ MB Goroutines: \d+', text):
                 return
-
-            # 处理可能的乱码
-            if isinstance(text, bytes):
-                text = text.decode('utf-8', errors='replace')
-            elif isinstance(text, str):
-                # 尝试重新编码解码来处理潜在的乱码
-                text = text.encode('utf-8', errors='replace').decode('utf-8')
-            
             timestamp = datetime.now().strftime("%H:%M:%S")
             log_text_style = ft.TextStyle(
                 size=13,
                 weight=ft.FontWeight.W_400,
                 color=ft.Colors.GREY_800,
-                font_family="Consolas"  # 使用等宽字体
+                font_family="Consolas"
             )
-            
-            # 如果需要替换最后一行
             if replace_last and len(self.upload_log_view.controls) > 0:
                 self.upload_log_view.controls[-1].content.value = f"[{timestamp}] {text}"
-                self.upload_log_view.controls[-1].content.update()
+                self.run_on_ui(self.upload_log_view.page, lambda: self.upload_log_view.controls[-1].content.update())
             else:
                 self.upload_log_view.controls.append(
                     ft.Container(
@@ -2225,16 +2249,10 @@ class TDLDownloaderApp:
                         padding=ft.padding.symmetric(vertical=2)
                     )
                 )
-                
-            if len(self.upload_log_view.controls) > 1000:  # 限制日志数量
+            if len(self.upload_log_view.controls) > 1000:
                 self.upload_log_view.controls.pop(0)
-            
-            # 检查log_view是否已添加到页面
-            try:
-                self.upload_log_view.update()
-            except:
-                # 如果未添加到页面，忽略更新错误
-                pass
+            if self.upload_log_view.page:
+                self.run_on_ui(self.upload_log_view.page, lambda: self.upload_log_view.update())
         except Exception as e:
             print(f"添加上传日志时出错: {str(e)}")
 
@@ -2242,36 +2260,32 @@ class TDLDownloaderApp:
         """更新上传进度条"""
         try:
             if current_value is not None and self.upload_current_progress is not None:
-                # 确保进度值在有效范围内
                 current_value = max(0, min(100, current_value))
-                # 使用极小的阈值，几乎实时更新
                 if abs(self.upload_current_progress.value * 100 - current_value) >= 0.01:
                     self.upload_current_progress.value = current_value / 100
-                    # 只在整数值变化时更新文本
-                    new_text = f"{int(current_value)}%"
-                    if self.upload_current_progress_text.value != new_text:
+                    new_text = f"{current_value:.1f}%"
+                    if self.upload_current_progress_text and self.upload_current_progress_text.value != new_text:
                         self.upload_current_progress_text.value = new_text
-                        self.upload_current_progress_text.update()
-                    self.upload_current_progress.update()
-            
+                        if self.upload_current_progress_text.page:
+                            self.update_control_safe(self.upload_current_progress_text.page, self.upload_current_progress_text)
+                    if self.upload_current_progress.page:
+                        self.update_control_safe(self.upload_current_progress.page, self.upload_current_progress)
             if total_value is not None and self.upload_total_progress is not None:
-                # 确保进度值在有效范围内
                 total_value = max(0, min(100, total_value))
-                # 使用极小的阈值，几乎实时更新
                 if abs(self.upload_total_progress.value * 100 - total_value) >= 0.01:
                     self.upload_total_progress.value = total_value / 100
-                    # 只在整数值变化时更新文本
-                    new_text = f"{int(total_value)}%"
-                    if self.upload_total_progress_text.value != new_text:
+                    new_text = f"{total_value:.1f}%"
+                    if self.upload_total_progress_text and self.upload_total_progress_text.value != new_text:
                         self.upload_total_progress_text.value = new_text
-                        self.upload_total_progress_text.update()
-                    self.upload_total_progress.update()
-            
+                        if self.upload_total_progress_text.page:
+                            self.update_control_safe(self.upload_total_progress_text.page, self.upload_total_progress_text)
+                    if self.upload_total_progress.page:
+                        self.update_control_safe(self.upload_total_progress.page, self.upload_total_progress)
             if text is not None and self.upload_current_task_text is not None:
                 if self.upload_current_task_text.value != text:
                     self.upload_current_task_text.value = text
-                    self.upload_current_task_text.update()
-
+                    if self.upload_current_task_text.page:
+                        self.update_control_safe(self.upload_current_task_text.page, self.upload_current_task_text)
         except Exception as e:
             print(f"更新上传进度条时出错: {str(e)}")
     
@@ -2348,19 +2362,17 @@ class TDLDownloaderApp:
     def update_download_progress(self, progress=None, speed=None):
         """更新下载进度显示"""
         try:
-            # 更新进度
             if progress is not None:
-                # 更新进度条
                 self.total_progress_bar.value = progress / 100
                 self.total_progress_text.value = f"{progress:.1f}%"
-                self.total_progress_bar.update()
-                self.total_progress_text.update()
-            
-            # 更新速度显示
+                if self.total_progress_bar.page:
+                    self.update_control_safe(self.total_progress_bar.page, self.total_progress_bar)
+                if self.total_progress_text.page:
+                    self.update_control_safe(self.total_progress_text.page, self.total_progress_text)
             if speed is not None:
                 self.download_speed_text.value = speed
-                self.download_speed_text.update()
-            
+                if self.download_speed_text.page:
+                    self.update_control_safe(self.download_speed_text.page, self.download_speed_text)
         except Exception as e:
             print(f"更新下载进度显示时出错: {str(e)}")
 
@@ -2389,6 +2401,21 @@ class TDLDownloaderApp:
             self.show_snackbar(page, "上传日志已复制到剪贴板！")
         except Exception as ex:
             self.show_snackbar(page, f"复制失败: {ex}")
+
+    # 新增线程安全的UI操作方法
+    def run_on_ui(self, page, func):
+        if hasattr(page, 'run_on_main_thread'):
+            page.run_on_main_thread(func)
+        elif hasattr(page, 'call_later'):
+            page.call_later(func)
+        else:
+            func()
+
+    def show_snackbar_safe(self, page, message):
+        self.run_on_ui(page, lambda: self.show_snackbar(page, message))
+
+    def update_control_safe(self, page, control):
+        self.run_on_ui(page, lambda: control.update())
 
 if __name__ == "__main__":
     app = TDLDownloaderApp()
