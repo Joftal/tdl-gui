@@ -27,7 +27,7 @@ def build_executable():
     print("开始打包...")
     
     # 检查必要文件
-    required_files = ['tdl_flet.py', 'tdl_flet.spec', 'tdl.exe', 'ico.ico', 'file_version_info.txt']
+    required_files = ['tdl_flet.py', 'tdl_flet.spec', 'tdl.exe', 'ico.ico']
     for file in required_files:
         if not os.path.exists(file):
             print(f"错误: 找不到必要的文件 {file}")

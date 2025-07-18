@@ -46,5 +46,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon='ico.ico',  # 更新为正确的图标文件名
-    version='file_version_info.txt',
+    # version='file_version_info.txt',  # 已移除version参数
 ) 
