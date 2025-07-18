@@ -1419,7 +1419,6 @@ class TDLDownloaderApp:
     def open_download_folder(self, e=None):
         """打开下载文件夹"""
         try:
-            self.add_log(f"打开下载文件夹: {self.downloads_dir}")
             if os.path.exists(self.downloads_dir):
                 if os.name == 'nt':  # Windows
                     os.startfile(self.downloads_dir)
@@ -1429,7 +1428,6 @@ class TDLDownloaderApp:
                     except:
                         subprocess.Popen(['open', self.downloads_dir])  # macOS
             else:
-                self.add_log("下载文件夹不存在，正在创建...")
                 os.makedirs(self.downloads_dir, exist_ok=True)
                 self.open_download_folder()
         except Exception as e:
@@ -1530,6 +1528,8 @@ class TDLDownloaderApp:
                 filename = link.split('/')[-1].split('?')[0]
                 self.download_links_map[filename] = link
                 self.add_log(f"记录文件映射: {filename} -> {link}")
+            # 反向映射，便于完成时查找
+            self.filename_to_link = {filename: link for filename, link in self.download_links_map.items()}
 
             print("开始下载...")  # 调试输出
             self.add_log(f"下载保存目录: {self.downloads_dir}")
@@ -1596,6 +1596,8 @@ class TDLDownloaderApp:
             
             # 初始化变量
             current_task = None
+            self.finished_files = set()
+            self.started_files = set()
             
             # 正则表达式模式
             start_pattern = re.compile(rb'Downloading\s+(.+?)\s+to\s+')
@@ -1665,7 +1667,17 @@ class TDLDownloaderApp:
                                 current_task = decode_bytes(filename_bytes)
                                 # 移除可能的控制字符
                                 current_task = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K', '', current_task)
-                                self.add_log(f"→ 开始下载: {current_task}")
+                                # 尝试找到对应链接
+                                matched_link = None
+                                for fname, link in self.download_links_map.items():
+                                    if fname in current_task:
+                                        matched_link = link
+                                        break
+                                if matched_link:
+                                    self.add_log(f"→ 开始下载: {current_task} ({matched_link})")
+                                else:
+                                    self.add_log(f"→ 开始下载: {current_task}")
+                                last_reported_task = current_task
                                 continue
                             
                             # 检测任务完成
@@ -1676,8 +1688,20 @@ class TDLDownloaderApp:
                                 filename = decode_bytes(filename_bytes)
                                 # 移除可能的控制字符
                                 filename = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K', '', filename)
-                                self.add_log(f"√ 完成下载: {filename}")
+                                self.finished_files.add(filename)
+                                # 尝试找到对应链接
+                                matched_link = None
+                                for fname, link in self.download_links_map.items():
+                                    if fname in filename or filename in fname:
+                                        matched_link = link
+                                        break
+                                if matched_link:
+                                    self.add_log(f"√ 完成下载: {filename} ({matched_link})")
+                                else:
+                                    self.add_log(f"√ 完成下载: {filename}")
                                 self.completed_tasks += 1
+                                if current_task == filename:
+                                    current_task = None
                                 # 更新总进度
                                 total_progress = (self.completed_tasks / self.total_tasks) * 100
                                 self.update_download_progress(progress=total_progress)
@@ -1687,8 +1711,8 @@ class TDLDownloaderApp:
                             progress_match = progress_pattern.search(line)
                             speed_match = speed_pattern.search(line)
                             
+                            # 只更新进度条和速度，不再add_log进度和速度日志
                             if self.enable_multi_task:
-                                # 多任务模式：只解析 [#####....] [6s; 1.49 MB/s] 这种行
                                 bar_speed_pattern = re.compile(rb'\[(#+)([\. ]+)\]\s*\[(\d+)s;\s*([\d\.]+)\s*([KMGT]?B)/s\]', re.I)
                                 match = bar_speed_pattern.search(line)
                                 if match:
@@ -1708,13 +1732,15 @@ class TDLDownloaderApp:
                                     speed = self._format_speed(speed_in_bytes)
                                     self.update_download_progress(progress=progress, speed=speed)
                                     self.update_network_speed(speed_in_bytes, True)
-                                    # 先写日志，再 continue
-                                    decoded_line = decode_bytes(line)
-                                    decoded_line = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K', '', decoded_line)
-                                    self.add_log(decoded_line)
-                                    continue
+                                    # 检查是否有新任务需要输出开始日志
+                                    for fname in self.download_links_map:
+                                        if fname not in self.started_files and fname not in self.finished_files:
+                                            self.add_log(f"→ 开始下载: {fname} ({self.download_links_map.get(fname, '')})")
+                                            self.started_files.add(fname)
+                                            current_task = fname
+                                            break
+                                    continue  # 不再add_log
                             else:
-                                # 单任务模式：原有逻辑
                                 if progress_match or speed_match:
                                     progress = None
                                     speed = None
@@ -1742,21 +1768,24 @@ class TDLDownloaderApp:
                                         progress=progress,
                                         speed=speed
                                     )
-                            
-                            # 解码当前行
-                            decoded_line = decode_bytes(line)
-                            # 移除可能的控制字符
-                            decoded_line = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K', '', decoded_line)
-                            
-                            # 如果有当前任务，在输出中添加任务标识
-                            if current_task and decoded_line:  # 确保解码后的行不为空
-                                # 检查是否包含进度信息
-                                if '%' in decoded_line:
-                                    self.add_log(f"  [{current_task}] {decoded_line}")
-                                else:
-                                    self.add_log(f"  {decoded_line}")
-                            elif decoded_line:  # 确保解码后的行不为空
-                                self.add_log(decoded_line)
+                                    # 检查是否有新任务需要输出开始日志
+                                    for fname in self.download_links_map:
+                                        if fname not in self.started_files and fname not in self.finished_files:
+                                            self.add_log(f"→ 开始下载: {fname} ({self.download_links_map.get(fname, '')})")
+                                            self.started_files.add(fname)
+                                            current_task = fname
+                                            break
+                                    continue  # 不再add_log
+                            # 其它日志依旧保留
+                            # decoded_line = decode_bytes(line)
+                            # decoded_line = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K', '', decoded_line)
+                            # if current_task and decoded_line:
+                            #     if '%' in decoded_line:
+                            #         self.add_log(f"  [{current_task}] {decoded_line}")
+                            #     else:
+                            #         self.add_log(f"  {decoded_line}")
+                            # elif decoded_line:
+                            #     self.add_log(decoded_line)
                 except Exception as e:
                     self.add_log(f"[日志解析错误: {str(e)}]")
                     print(f"Debug - 日志解析错误: {str(e)}")
