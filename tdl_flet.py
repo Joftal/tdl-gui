@@ -822,7 +822,8 @@ class TDLDownloaderApp:
                 value="4",
                 hint_text="每个任务的线程数",
                 prefix_icon=ft.Icons.SETTINGS_ETHERNET_ROUNDED,
-                **textfield_style
+                **textfield_style,
+                disabled=True  # 默认禁用，随多任务开关联动
             )
 
             concurrent_field = ft.TextField(
@@ -830,7 +831,29 @@ class TDLDownloaderApp:
                 value="2",
                 hint_text="同时上传的文件数",
                 prefix_icon=ft.Icons.COMPARE_ARROWS_ROUNDED,
-                **textfield_style
+                **textfield_style,
+                disabled=True  # 默认禁用，随多任务开关联动
+            )
+
+            # 多任务上传开关
+            self.enable_multi_upload = False
+            # 多任务参数输入框容器，初始隐藏
+            multi_upload_params_container = ft.Container(
+                content=ft.Row([
+                    threads_field, concurrent_field
+                ], spacing=5),
+                visible=False
+            )
+            def toggle_multi_upload(e):
+                self.enable_multi_upload = e.control.value
+                threads_field.disabled = not self.enable_multi_upload
+                concurrent_field.disabled = not self.enable_multi_upload
+                multi_upload_params_container.visible = self.enable_multi_upload
+                page.update()
+            multi_upload_checkbox = ft.Checkbox(
+                label="启用多任务上传",
+                value=False,
+                on_change=toggle_multi_upload,
             )
 
             # 上传选项
@@ -884,17 +907,13 @@ class TDLDownloaderApp:
             
             def start_upload(e):
                 try:
-                    #print("开始上传...")  # 调试输出
                     if not self.selected_files:
                         self.show_snackbar(page, "请先选择要上传的文件")
                         return
-                    
-                    # 获取配置
                     chat = chat_field.value.strip()
                     if not chat:
                         self.show_snackbar(page, "请输入目标聊天")
                         return
-
                     try:
                         threads = int(threads_field.value)
                         concurrent = int(concurrent_field.value)
@@ -903,19 +922,14 @@ class TDLDownloaderApp:
                     except:
                         self.show_snackbar(page, "线程数和并发数必须是大于0的整数")
                         return
-
-                    # 禁用上传按钮
                     upload_button.disabled = True
                     upload_button.update()
-
-                    # 添加初始日志
                     self.add_upload_log("开始上传任务...")
                     self.add_upload_log(f"目标聊天: {chat}")
                     self.add_upload_log(f"线程数: {threads}, 并发数: {concurrent}")
                     self.add_upload_log(f"以照片形式上传: {'是' if upload_as_photo.value else '否'}")
                     self.add_upload_log(f"上传后删除: {'是' if delete_after_upload.value else '否'}")
-
-                    # 启动上传线程
+                    # 启动上传线程，增加多任务参数
                     threading.Thread(
                         target=self._upload_thread,
                         args=(
@@ -925,18 +939,18 @@ class TDLDownloaderApp:
                             concurrent,
                             upload_as_photo.value,
                             delete_after_upload.value,
-                            page
+                            page,
+                            self.enable_multi_upload  # 新增参数
                         ),
                         daemon=True
                     ).start()
-                    
                 except Exception as ex:
-                    print(f"启动上传任务时出错: {str(ex)}")  # 调试输出
+                    print(f"启动上传任务时出错: {str(ex)}")
                     self.add_upload_log(f"启动上传任务时出错: {str(ex)}")
                     self.show_snackbar(page, f"启动上传任务时出错: {str(ex)}")
                     upload_button.disabled = False
                     upload_button.update()
-            
+
             # 创建上传按钮和提示文本
             upload_button = ft.ElevatedButton(
                 text="开始上传",
@@ -976,6 +990,19 @@ class TDLDownloaderApp:
             
             # 初始化上传日志
             self.add_upload_log("准备就绪，请选择要上传的文件")
+            
+            # 上传日志卡片右上角增加复制按钮
+            copy_upload_log_button = ft.IconButton(
+                icon=ft.Icons.CONTENT_COPY_ROUNDED,
+                tooltip="复制全部日志",
+                on_click=lambda e: self._copy_upload_logs_to_clipboard(e, page),
+                style=ft.ButtonStyle(
+                    shape=ft.RoundedRectangleBorder(radius=6),
+                    padding=ft.padding.all(8),
+                    bgcolor=ft.Colors.BLUE_100,
+                    color=ft.Colors.BLUE_700,
+                ),
+            )
             
             # 构建界面
             upload_tab = ft.Container(
@@ -1020,11 +1047,7 @@ class TDLDownloaderApp:
                                         elevation=2,
                                         surface_tint_color=ft.Colors.WHITE
                                     ),
-                                    
-                                    # 添加间距容器
                                     ft.Container(height=10),
-                                    
-                                    # 调整上传设置卡片的间距
                                     ft.Card(
                                         content=ft.Container(
                                             content=ft.Column([
@@ -1035,33 +1058,36 @@ class TDLDownloaderApp:
                                                     ]
                                                 ),
                                                 ft.Divider(height=1, thickness=1, color=ft.Colors.BLACK12),
-                                                ft.Container(height=2),  # 进一步减小间距
+                                                ft.Container(height=2),
                                                 ft.Row(
                                                     [chat_field],
                                                     spacing=5
                                                 ),
-                                                ft.Container(height=2),  # 进一步减小间距
-                                                ft.Row(
-                                                    [threads_field, concurrent_field],
-                                                    spacing=5
-                                                ),
-                                                ft.Container(height=2),  # 进一步减小间距
+                                                ft.Container(height=2),
+                                                # 多任务上传开关
+                                                ft.Row([
+                                                    multi_upload_checkbox
+                                                ], spacing=5),
+                                                # 多任务参数输入框容器
+                                                multi_upload_params_container,
+                                                ft.Container(height=2),
                                                 ft.Row(
                                                     [upload_as_photo, delete_after_upload],
                                                     spacing=5
                                                 ),
-                                                ft.Container(height=2),  # 进一步减小间距
-                                                upload_button_row,  # 使用包含按钮和提示文本的行
+                                                ft.Container(height=2),
+                                                upload_button_row,
                                             ]),
-                                            padding=5  # 进一步减小内边距
+                                            padding=5
                                         ),
                                         elevation=2,
-                                        margin=ft.margin.only(top=5),  # 进一步减小卡片间距
+                                        margin=ft.margin.only(top=5),
                                         surface_tint_color=ft.Colors.WHITE
                                     ),
                                 ],
                                 spacing=0,
-                                expand=True
+                                expand=True,
+                                scroll='auto',  # 让左侧内容整体可滚动
                             ),
                             expand=5,
                             padding=ft.padding.only(right=10)
@@ -1132,6 +1158,7 @@ class TDLDownloaderApp:
                                                         ft.Icon(ft.Icons.ARTICLE_ROUNDED, color=ft.Colors.CYAN_400),
                                                         ft.Text("上传日志", style=subtitle_style),
                                                         ft.Container(expand=True),
+                                                        copy_upload_log_button,
                                                         clear_upload_log_button
                                                     ]
                                                 ),
@@ -1921,42 +1948,44 @@ class TDLDownloaderApp:
         except Exception as e:
             print(f"更新网络速度显示时出错: {str(e)}")
 
-    def _upload_thread(self, files, chat, threads, concurrent, as_photo, delete_after, page):
+    def _upload_thread(self, files, chat, threads, concurrent, as_photo, delete_after, page, enable_multi_upload=False):
         try:
-            # 初始化变量
             last_bytes = 0
             last_time = time.time()
-            
-            #print("开始上传...")  # 调试输出
-            
-            # 重置进度条和提示文本
             self.update_upload_progress(current_value=0, total_value=0, text="准备上传")
             self.upload_complete_text.visible = False
             self.upload_complete_text.update()
-
-            # 创建批处理文件内容
             batch_content = "@echo off\n"
-            batch_content += "chcp 65001\n"  # 设置CMD编码为UTF-8
-            batch_content += "set PYTHONIOENCODING=utf-8\n"  # 设置Python输出编码
-            
-            # 添加环境变量设置命令
+            batch_content += "chcp 65001\n"
+            batch_content += "set PYTHONIOENCODING=utf-8\n"
             for var_name, var_value in self.env_vars.items():
                 batch_content += f"set {var_name}={var_value}\n"
-            
-            # 添加上传命令
             total_files = len(files)
-            for i, file in enumerate(files):
-                # 构建上传命令
-                up_cmd = f"tdl.exe up -p \"{file.path}\" -c {chat} -t {threads} -l {concurrent}"
+            if enable_multi_upload:
+                # 多任务上传：合并所有文件为一个命令
+                up_cmd = f"tdl.exe up -t {threads} -l {concurrent} -c {chat}"
+                for file in files:
+                    up_cmd += f" -p \"{file.path}\""
                 if as_photo:
                     up_cmd += " --photo"
                 if delete_after:
                     up_cmd += " --rm"
-                
-                batch_content += f"echo [TDLGUI_MARKER] 开始上传 {i+1}/{total_files}: {file.name}\n"
+                batch_content += f"echo [TDLGUI_MARKER] 开始上传 1/{total_files}: 多任务\n"
                 batch_content += f"{up_cmd}\n"
-                batch_content += f"echo [TDLGUI_MARKER] 完成上传 {i+1}/{total_files}\n"
+                batch_content += f"echo [TDLGUI_MARKER] 完成上传 1/{total_files}\n"
                 self.add_upload_log(f"添加上传命令: {up_cmd}")
+            else:
+                # 单任务上传：每个文件单独命令
+                for i, file in enumerate(files):
+                    up_cmd = f"tdl.exe up -p \"{file.path}\" -c {chat} -t {threads} -l {concurrent}"
+                    if as_photo:
+                        up_cmd += " --photo"
+                    if delete_after:
+                        up_cmd += " --rm"
+                    batch_content += f"echo [TDLGUI_MARKER] 开始上传 {i+1}/{total_files}: {file.name}\n"
+                    batch_content += f"{up_cmd}\n"
+                    batch_content += f"echo [TDLGUI_MARKER] 完成上传 {i+1}/{total_files}\n"
+                    self.add_upload_log(f"添加上传命令: {up_cmd}")
             
             # 创建临时批处理文件
             batch_file = os.path.join(self.base_path, "tdl_upload.bat")
@@ -1994,27 +2023,21 @@ class TDLDownloaderApp:
             last_progress = 0
             current_progress_line = None  # 当前进度输出行
             progress_bar_width = 30  # 进度条宽度
-            
             def make_progress_bar(progress):
-                """生成文本进度条"""
                 filled = int(progress_bar_width * progress / 100)
                 bar = '█' * filled + '░' * (progress_bar_width - filled)
                 return f"[{bar}] {progress:.1f}%"
-            
             while True:
                 line = process.stdout.readline()
                 if not line and process.poll() is not None:
                     break
                 if line:
                     try:
-                        # 处理编码问题
                         if isinstance(line, bytes):
                             line = line.decode('utf-8', errors='replace')
                         line = line.strip()
-                        
                         # 检测我们的特殊标记
                         if "[TDLGUI_MARKER] 开始上传" in line:
-                            # 重置速度计算变量
                             last_bytes = 0
                             last_time = time.time()
                             self.update_network_speed(0, False)
@@ -2032,30 +2055,63 @@ class TDLDownloaderApp:
                                 total_progress = (completed_files / total_files) * 100
                                 self.update_upload_progress(total_value=total_progress)
                                 last_progress = 0
-                        
+                            else:
+                                # 多任务上传时，file_name为"多任务"
+                                is_uploading = True
+                                current_progress_line = f"正在多任务上传 ({current_file_index+1}/{total_files})\n{make_progress_bar(0)}"
+                                self.add_upload_log(current_progress_line)
+                                self.update_upload_progress(
+                                    current_value=0,
+                                    text=f"多任务上传 {current_file_index+1}/{total_files}"
+                                )
+                                total_progress = (completed_files / total_files) * 100
+                                self.update_upload_progress(total_value=total_progress)
+                                last_progress = 0
                         elif "[TDLGUI_MARKER] 完成上传" in line:
-                            # 重置速度显示
                             self.update_network_speed(0, False)
                             completed_files += 1
                             is_uploading = False
                             if current_progress_line:
-                                final_progress = f"正在上传 ({current_file_index+1}/{total_files}): {file_name}\n{make_progress_bar(100)} - 完成"
+                                final_progress = f"{current_progress_line.splitlines()[0]}\n{make_progress_bar(100)} - 完成"
                                 self.add_upload_log(final_progress, replace_last=True)
                                 current_progress_line = None
                             self.update_upload_progress(current_value=100)
                             total_progress = (completed_files / total_files) * 100
                             self.update_upload_progress(total_value=total_progress)
                             last_progress = 100
-                        
-                        # 如果正在上传，尝试从输出中解析进度和速度
                         elif is_uploading:
-                            # 尝试解析速度信息
+                            # 多任务上传时，解析整体进度和速度
+                            if enable_multi_upload:
+                                # 解析如 [#####....] [6s; 1.49 MB/s] 这种行
+                                bar_speed_pattern = re.compile(r'\[(#+)([\. ]+)\]\s*\[(\d+)s;\s*([\d\.]+)\s*([KMGT]?B)/s\]', re.I)
+                                match = bar_speed_pattern.search(line)
+                                if match:
+                                    bar_count = len(match.group(1))
+                                    total_count = bar_count + len(match.group(2))
+                                    progress = (bar_count / total_count) * 100 if total_count > 0 else 0
+                                    speed_value = float(match.group(4))
+                                    speed_unit = match.group(5).upper()
+                                    multiplier = {
+                                        'B': 1,
+                                        'KB': 1024,
+                                        'MB': 1024 * 1024,
+                                        'GB': 1024 * 1024 * 1024,
+                                        'TB': 1024 * 1024 * 1024 * 1024
+                                    }.get(speed_unit, 1)
+                                    speed_in_bytes = speed_value * multiplier
+                                    self.update_network_speed(speed_in_bytes, False)
+                                    progress_text = f"{current_progress_line.splitlines()[0]}\n{make_progress_bar(progress)}"
+                                    self.add_upload_log(progress_text, replace_last=True)
+                                    self.update_upload_progress(current_value=progress)
+                                    total_progress = progress
+                                    self.update_upload_progress(total_value=total_progress)
+                                    last_progress = progress
+                                    continue
+                            # 单任务上传原有逻辑
                             speed_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMGT]?B)/s', line, re.IGNORECASE)
                             if speed_match:
                                 value = float(speed_match.group(1))
                                 unit = speed_match.group(2).upper()
-                                
-                                # 转换为字节每秒
                                 multiplier = {
                                     'B': 1,
                                     'KB': 1024,
@@ -2063,25 +2119,19 @@ class TDLDownloaderApp:
                                     'GB': 1024 * 1024 * 1024,
                                     'TB': 1024 * 1024 * 1024 * 1024
                                 }.get(unit, 1)
-                                
                                 speed_in_bytes = value * multiplier
                                 self.update_network_speed(speed_in_bytes, False)
-                            
                             progress_match = re.search(r'(\d+\.\d+)%', line)
                             if progress_match and current_progress_line:
                                 file_progress = float(progress_match.group(1))
-                                # 更新进度条
-                                progress_text = f"正在上传 ({current_file_index+1}/{total_files}): {file_name}\n{make_progress_bar(file_progress)}"
+                                progress_text = f"{current_progress_line.splitlines()[0]}\n{make_progress_bar(file_progress)}"
                                 self.add_upload_log(progress_text, replace_last=True)
-                                # 更新进度条
                                 self.update_upload_progress(current_value=file_progress)
                                 total_progress = ((completed_files + file_progress / 100) / total_files) * 100
                                 self.update_upload_progress(total_value=total_progress)
                                 last_progress = file_progress
                             elif not progress_match and not line.startswith("[TDLGUI_MARKER]"):
-                                # 输出非进度信息
                                 self.add_upload_log(line)
-                    
                     except Exception as e:
                         self.add_upload_log(f"[日志解析错误: {str(e)}]")
             
@@ -2324,6 +2374,19 @@ class TDLDownloaderApp:
             all_logs = '\n'.join(logs)
             page.set_clipboard(all_logs)
             self.show_snackbar(page, "日志已复制到剪贴板！")
+        except Exception as ex:
+            self.show_snackbar(page, f"复制失败: {ex}")
+
+    # 新增上传日志复制方法
+    def _copy_upload_logs_to_clipboard(self, e, page):
+        try:
+            logs = []
+            for c in self.upload_log_view.controls:
+                if hasattr(c, 'content') and hasattr(c.content, 'value'):
+                    logs.append(str(c.content.value))
+            all_logs = '\n'.join(logs)
+            page.set_clipboard(all_logs)
+            self.show_snackbar(page, "上传日志已复制到剪贴板！")
         except Exception as ex:
             self.show_snackbar(page, f"复制失败: {ex}")
 
