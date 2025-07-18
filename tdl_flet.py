@@ -72,6 +72,40 @@ class TDLDownloaderApp:
         self.upload_total_progress_text = None
         self.selected_files = []
         
+        # 初始化多任务下载设置
+        self.enable_multi_task = False
+        
+        # 初始化下载进度显示
+        self.download_speed_text = ft.Text("0 B/s", style=ft.TextStyle(
+            size=14,
+            weight=ft.FontWeight.W_400,
+            color=ft.Colors.GREEN_400
+        ))
+        self.current_download_speed = "0 B/s"
+        
+        # 初始化总体进度条
+        self.total_progress_bar = ft.ProgressBar(
+            width=600,
+            value=0,
+            height=10,  # 增加高度使进度条更明显
+            bar_height=10,
+            bgcolor=ft.Colors.BLUE_50,
+            color=ft.Colors.BLUE,
+        )
+        self.total_progress_text = ft.Text(
+            "0%",
+            style=ft.TextStyle(
+                size=14,
+                weight=ft.FontWeight.BOLD,  # 加粗显示进度
+                color=ft.Colors.BLUE_700
+            )
+        )
+        
+        # 初始化任务进度
+        self.total_tasks = 0
+        self.completed_tasks = 0
+        self.current_task_progress = 0
+
     def main(self, page: ft.Page):
         # 设置页面属性
         page.title = "TDL下载器"
@@ -166,6 +200,17 @@ class TDLDownloaderApp:
                 )
                 page.dialog.open = True
                 page.update()
+            
+            # 创建任务列表容器
+            self.tasks_container = ft.Container(
+                content=ft.Column([], spacing=10),
+                bgcolor=ft.Colors.BLUE_50,
+                border_radius=8,
+                padding=10,
+                expand=True,
+                height=300,  # 增加高度以显示更多任务
+                border=ft.border.all(1, ft.Colors.BLUE_200),
+            )
             
             # 状态栏
             # self.status_text.value = "就绪" # This line is removed
@@ -354,6 +399,60 @@ class TDLDownloaderApp:
                                                     content=links_field,
                                                     height=220,  # 减少容器高度
                                                 ),
+                                                # 添加多任务下载开关
+                                                ft.Row(
+                                                    [
+                                                        ft.Checkbox(
+                                                            label="启用多任务下载",
+                                                            value=False,
+                                                            on_change=lambda e: toggle_multi_task(e),
+                                                        ),
+                                                    ],
+                                                    spacing=10
+                                                ),
+                                                # 多任务设置（默认隐藏）
+                                                ft.Container(
+                                                    content=ft.Row(
+                                                        [
+                                                            ft.TextField(
+                                                                label="下载线程数",
+                                                                value="4",
+                                                                hint_text="每个任务的线程数",
+                                                                prefix_icon=ft.Icons.SETTINGS_ETHERNET_ROUNDED,
+                                                                expand=True,
+                                                                border_radius=8,
+                                                                filled=True,
+                                                                bgcolor=ft.Colors.BLUE_50,
+                                                                border_color=ft.Colors.BLUE_200,
+                                                                focused_border_color=ft.Colors.BLUE,
+                                                                focused_bgcolor=ft.Colors.WHITE,
+                                                                text_size=14,
+                                                                cursor_color=ft.Colors.BLUE,
+                                                                selection_color=ft.Colors.BLUE_100,
+                                                                disabled=True,
+                                                            ),
+                                                            ft.TextField(
+                                                                label="并发任务数",
+                                                                value="2",
+                                                                hint_text="同时下载的文件数",
+                                                                prefix_icon=ft.Icons.COMPARE_ARROWS_ROUNDED,
+                                                                expand=True,
+                                                                border_radius=8,
+                                                                filled=True,
+                                                                bgcolor=ft.Colors.BLUE_50,
+                                                                border_color=ft.Colors.BLUE_200,
+                                                                focused_border_color=ft.Colors.BLUE,
+                                                                focused_bgcolor=ft.Colors.WHITE,
+                                                                text_size=14,
+                                                                cursor_color=ft.Colors.BLUE,
+                                                                selection_color=ft.Colors.BLUE_100,
+                                                                disabled=True,
+                                                            ),
+                                                        ],
+                                                        spacing=10
+                                                    ),
+                                                    visible=False,
+                                                ),
                                                 ft.Row(
                                                     [download_button, open_folder_button],
                                                     spacing=10
@@ -381,46 +480,57 @@ class TDLDownloaderApp:
                                     ft.Card(
                                         content=ft.Container(
                                             content=ft.Column([
+                                                # 标题行
                                                 ft.Row(
                                                     [
-                                                        ft.Icon(ft.Icons.TRENDING_DOWN_ROUNDED, color=ft.Colors.PURPLE_400),
-                                                        ft.Text("下载进度", style=subtitle_style),
-                                                        ft.Container(expand=True),
-                                                        ft.Text("网络速度:", style=ft.TextStyle(
-                                                            size=14,
-                                                            weight=ft.FontWeight.W_400,
-                                                            color=ft.Colors.GREY_700
-                                                        )),
-                                                        ft.Icon(ft.Icons.ARROW_DOWNWARD_ROUNDED, color=ft.Colors.GREEN_400),
-                                                        self.download_speed_text
+                                                        ft.Icon(ft.Icons.DOWNLOAD_ROUNDED, color=ft.Colors.BLUE_400),
+                                                        ft.Text("下载状态", style=subtitle_style),
                                                     ]
                                                 ),
                                                 ft.Divider(height=1, thickness=1, color=ft.Colors.BLACK12),
+                                                # 速度和进度行
                                                 ft.Container(
                                                     content=ft.Column([
-                                                        ft.Row([
-                                                            ft.Icon(ft.Icons.TASK_ALT_ROUNDED, color=ft.Colors.BLUE_400, size=16),
-                                                            ft.Text("当前任务:", style=normal_text_style),
-                                                            self.current_task_text
-                                                        ]),
-                                                        ft.Container(height=5),
-                                                        ft.Row([
-                                                            ft.Icon(ft.Icons.FILE_DOWNLOAD_ROUNDED, color=ft.Colors.GREEN_400, size=16),
-                                                            ft.Text("当前文件:", style=normal_text_style),
-                                                            ft.Container(expand=True),
-                                                            self.current_progress_text
-                                                        ]),
-                                                        self.current_progress,
-                                                        ft.Container(height=10),
-                                                        ft.Row([
-                                                            ft.Icon(ft.Icons.ANALYTICS_ROUNDED, color=ft.Colors.ORANGE_400, size=16),
-                                                            ft.Text("总体进度:", style=normal_text_style, weight=ft.FontWeight.BOLD),
-                                                            ft.Container(expand=True),
-                                                            self.total_progress_text
-                                                        ]),
-                                                        self.total_progress,
+                                                        ft.Row(
+                                                            [
+                                                                ft.Row(
+                                                                    [
+                                                                        ft.Text(
+                                                                            "下载速度：",
+                                                                            style=ft.TextStyle(
+                                                                                size=14,
+                                                                                weight=ft.FontWeight.W_500,
+                                                                                color=ft.Colors.GREY_800
+                                                                            ),
+                                                                        ),
+                                                                        ft.Icon(ft.Icons.SPEED_ROUNDED, 
+                                                                               color=ft.Colors.GREEN_400,
+                                                                               size=16),
+                                                                        self.download_speed_text,
+                                                                    ],
+                                                                ),
+                                                                ft.Container(expand=True),
+                                                                ft.Row(
+                                                                    [
+                                                                        ft.Text(
+                                                                            "下载进度：",
+                                                                            style=ft.TextStyle(
+                                                                                size=14,
+                                                                                weight=ft.FontWeight.W_500,
+                                                                                color=ft.Colors.GREY_800
+                                                                            ),
+                                                                        ),
+                                                                        self.total_progress_text,
+                                                                    ],
+                                                                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                                                                ),
+                                                            ],
+                                                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                                                        ),
+                                                        ft.Container(height=10),  # 增加间距
+                                                        self.total_progress_bar,
                                                     ]),
-                                                    padding=ft.padding.only(top=10, bottom=10)
+                                                    padding=10
                                                 ),
                                             ]),
                                             padding=15
@@ -438,6 +548,17 @@ class TDLDownloaderApp:
                                                         ft.Icon(ft.Icons.ARTICLE_ROUNDED, color=ft.Colors.CYAN_400),
                                                         ft.Text("输出日志", style=subtitle_style),
                                                         ft.Container(expand=True),
+                                                        ft.IconButton(
+                                                            icon=ft.Icons.CONTENT_COPY_ROUNDED,
+                                                            tooltip="复制全部日志",
+                                                            on_click=lambda e: self._copy_logs_to_clipboard(e, page),
+                                                            style=ft.ButtonStyle(
+                                                                shape=ft.RoundedRectangleBorder(radius=6),
+                                                                padding=ft.padding.all(8),
+                                                                bgcolor=ft.Colors.BLUE_100,
+                                                                color=ft.Colors.BLUE_700,
+                                                            ),
+                                                        ),
                                                         clear_log_button
                                                     ]
                                                 ),
@@ -448,7 +569,8 @@ class TDLDownloaderApp:
                                                     border_radius=8,
                                                     bgcolor=ft.Colors.BLUE_50,
                                                     padding=10,
-                                                    expand=True
+                                                    expand=True,
+                                                    height=400  # 调整日志区域高度
                                                 )
                                             ]),
                                             padding=15,
@@ -471,6 +593,37 @@ class TDLDownloaderApp:
                 ),
                 expand=True
             )
+
+        def toggle_multi_task(e):
+            """切换多任务下载状态"""
+            self.enable_multi_task = e.control.value
+            # 获取多任务设置容器
+            multi_task_container = None
+            thread_field = None
+            concurrent_field = None
+            
+            for control in page.controls:
+                if isinstance(control, ft.Container):
+                    content_column = control.content
+                    if isinstance(content_column, ft.Column):
+                        main_content = content_column.controls[1]
+                        if isinstance(main_content, ft.Container):
+                            stack = main_content.content.content
+                            if isinstance(stack, ft.Stack):
+                                download_tab = stack.controls[0]
+                                if download_tab.visible:
+                                    left_panel = download_tab.content.content.controls[0]
+                                    download_card = left_panel.content.controls[1]
+                                    multi_task_container = download_card.content.content.controls[4]
+                                    thread_field = multi_task_container.content.controls[0]
+                                    concurrent_field = multi_task_container.content.controls[1]
+                                    break
+            
+            if multi_task_container and thread_field and concurrent_field:
+                multi_task_container.visible = self.enable_multi_task
+                thread_field.disabled = not self.enable_multi_task
+                concurrent_field.disabled = not self.enable_multi_task
+                page.update()
 
         # 创建上传标签页内容
         def create_upload_tab():
@@ -1258,7 +1411,11 @@ class TDLDownloaderApp:
         try:
             # 获取下载链接
             links_field = None
-            # 遍历页面寻找链接输入框
+            threads_field = None
+            concurrent_field = None
+            multi_task_checkbox = None
+            
+            # 遍历页面寻找输入框
             for control in e.page.controls:
                 if isinstance(control, ft.Container):
                     content_column = control.content
@@ -1271,7 +1428,13 @@ class TDLDownloaderApp:
                                 if download_tab.visible:  # 确保是当前可见的标签页
                                     left_panel = download_tab.content.content.controls[0]  # 获取左侧面板
                                     download_card = left_panel.content.controls[1]  # 获取下载设置卡片
-                                    links_field = download_card.content.content.controls[2].content  # 获取链接输入框
+                                    card_content = download_card.content.content.controls
+                                    links_field = card_content[2].content  # 获取链接输入框
+                                    multi_task_checkbox = card_content[3].controls[0]  # 获取多任务下载复选框
+                                    multi_task_container = card_content[4]  # 获取多任务设置容器
+                                    if multi_task_container.visible:  # 如果多任务设置可见
+                                        threads_field = multi_task_container.content.controls[0]  # 获取线程数输入框
+                                        concurrent_field = multi_task_container.content.controls[1]  # 获取并发数输入框
                                     break
             
             if not links_field:
@@ -1281,6 +1444,19 @@ class TDLDownloaderApp:
             if not links_text:
                 self.show_snackbar(e.page, "请输入下载链接")
                 return
+            
+            # 获取线程数和并发数（如果启用了多任务下载）
+            threads = 1
+            concurrent = 1
+            if multi_task_checkbox and multi_task_checkbox.value:
+                try:
+                    threads = int(threads_field.value)
+                    concurrent = int(concurrent_field.value)
+                    if threads < 1 or concurrent < 1:
+                        raise ValueError()
+                except:
+                    self.show_snackbar(e.page, "线程数和并发数必须是大于0的整数")
+                    return
             
             # 分割多行链接
             links = [link.strip() for link in links_text.split("\n") if link.strip()]
@@ -1299,7 +1475,7 @@ class TDLDownloaderApp:
                                 if download_tab.visible:  # 确保是当前可见的标签页
                                     left_panel = download_tab.content.content.controls[0]  # 获取左侧面板
                                     download_card = left_panel.content.controls[1]  # 获取下载设置卡片
-                                    download_button = download_card.content.content.controls[3].controls[0]  # 获取下载按钮
+                                    download_button = download_card.content.content.controls[5].controls[0]  # 获取下载按钮
                                     break
             
             if download_button:
@@ -1310,13 +1486,13 @@ class TDLDownloaderApp:
             os.makedirs(self.downloads_dir, exist_ok=True)
             
             # 启动下载线程
-            threading.Thread(target=self._download_thread, args=(links, e.page), daemon=True).start()
+            threading.Thread(target=self._download_thread, args=(links, threads, concurrent, e.page), daemon=True).start()
         
         except Exception as ex:
             self.add_log(f"启动下载时出错: {str(ex)}")
             self.show_snackbar(e.page, f"启动下载时出错: {str(ex)}")
     
-    def _download_thread(self, links, page):
+    def _download_thread(self, links, threads, concurrent, page):
         try:
             # 保存链接和文件名的映射关系
             self.download_links_map.clear()  # 清除旧的映射
@@ -1328,9 +1504,7 @@ class TDLDownloaderApp:
 
             print("开始下载...")  # 调试输出
             self.add_log(f"下载保存目录: {self.downloads_dir}")
-            
-            # 重置进度条
-            self.update_progress(current_value=0, total_value=0, text="准备下载")
+            self.add_log(f"下载线程数: {threads}, 并发任务数: {concurrent}")
             
             # 创建批处理文件内容
             batch_content = "@echo off\n"
@@ -1343,13 +1517,20 @@ class TDLDownloaderApp:
             
             # 添加下载命令
             total_links = len(links)
-            for i, link in enumerate(links):
-                # 添加下载命令到批处理文件
-                dl_cmd = f"tdl.exe dl -u {link}"
-                batch_content += f"echo [TDLGUI_MARKER] 开始下载 {i+1}/{total_links}: {link}\n"
+            
+            if self.enable_multi_task:
+                # 多任务模式：将所有链接合并到一个命令中
+                dl_cmd = f"tdl.exe dl -t {threads} -l {concurrent}"
+                for link in links:
+                    dl_cmd += f" -u {link}"
                 batch_content += f"{dl_cmd}\n"
-                batch_content += f"echo [TDLGUI_MARKER] 完成下载 {i+1}/{total_links}\n"
-                self.add_log(f"添加下载命令: {dl_cmd}")
+            else:
+                # 单任务模式：每个链接一个命令
+                for link in links:
+                    dl_cmd = f"tdl.exe dl -u {link}"
+                    batch_content += f"{dl_cmd}\n"
+            
+            self.add_log(f"添加下载命令: {dl_cmd}")
             
             # 创建临时批处理文件
             batch_file = os.path.join(self.base_path, "tdl_download.bat")
@@ -1364,119 +1545,192 @@ class TDLDownloaderApp:
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             
+            # 设置环境变量
+            env = os.environ.copy()
+            env['PYTHONIOENCODING'] = 'utf-8'
+            if os.name == 'nt':
+                env['PYTHONLEGACYWINDOWSSTDIO'] = '1'  # 修复Windows下的编码问题
+            
             process = subprocess.Popen(
                 batch_file,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 bufsize=1,
-                universal_newlines=True,
-                encoding='utf-8',
-                errors='replace',
+                universal_newlines=False,  # 改为False以手动处理编码
                 shell=True,
                 startupinfo=startupinfo,
-                env=dict(os.environ, PYTHONIOENCODING='utf-8')  # 设置Python输出编码
+                env=env
             )
             
             # 将进程添加到列表中
             self.running_processes.append(process)
             
-            # 在进度解析部分进行优化
-            current_file_index = 0
-            completed_files = 0
-            is_downloading = False
-            last_progress = 0
-            current_progress_line = None  # 当前进度输出行
-            progress_bar_width = 30  # 进度条宽度
+            # 初始化变量
+            current_task = None
             
-            def make_progress_bar(progress):
-                """生成文本进度条"""
-                filled = int(progress_bar_width * progress / 100)
-                bar = '█' * filled + '░' * (progress_bar_width - filled)
-                return f"[{bar}] {progress:.1f}%"
+            # 正则表达式模式
+            start_pattern = re.compile(rb'Downloading\s+(.+?)\s+to\s+')
+            done_pattern = re.compile(rb'(.+?)\s*->\s*.+?\s*done!')
+            # 添加系统信息匹配模式
+            system_info_pattern = re.compile(rb'CPU: \d+\.\d+% Memory: \d+\.\d+ MB Goroutines: \d+')
+            # 添加控制字符匹配模式
+            control_chars_pattern = re.compile(rb'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K')
+            # 添加进度匹配模式
+            progress_pattern = re.compile(rb'(\d+(?:\.\d+)?)%')
+            speed_pattern = re.compile(rb'(\d+(?:\.\d+)?)\s*([KMGT]?B)/s')
             
-            while True:
-                line = process.stdout.readline()
-                if not line and process.poll() is not None:
-                    break
-                if line:
+            def decode_bytes(b):
+                """解码字节流，优先utf-8，再gbk，最后fallback"""
+                try:
+                    b = control_chars_pattern.sub(b'', b)
+                    # 先尝试utf-8
                     try:
-                        # 处理编码问题
-                        if isinstance(line, bytes):
-                            line = line.decode('utf-8', errors='replace')
-                        line = line.strip()
-                        
-                        # 检测我们的特殊标记
-                        if "[TDLGUI_MARKER] 开始下载" in line:
-                            # 重置速度计算变量
-                            last_bytes = 0
-                            last_time = time.time()
-                            self.update_network_speed(0, True)
-                            match = re.search(r'开始下载 (\d+)/(\d+): (.+)$', line)
-                            if match:
-                                current_file_index = int(match.group(1)) - 1
-                                file_url = match.group(3)
-                                is_downloading = True
-                                current_progress_line = f"正在下载 ({current_file_index+1}/{total_links}): {file_url}\n{make_progress_bar(0)}"
-                                self.add_log(current_progress_line)
-                                self.update_progress(
-                                    current_value=0,
-                                    text=f"下载文件 {current_file_index+1}/{total_links}"
-                                )
-                                total_progress = (completed_files / total_links) * 100
-                                self.update_progress(total_value=total_progress)
-                                last_progress = 0
-                        
-                        elif "[TDLGUI_MARKER] 完成下载" in line:
-                            # 重置速度显示
-                            self.update_network_speed(0, True)
-                            completed_files += 1
-                            is_downloading = False
-                            if current_progress_line:
-                                final_progress = f"正在下载 ({current_file_index+1}/{total_links}): {file_url}\n{make_progress_bar(100)} - 完成"
-                                self.add_log(final_progress, replace_last=True)
-                                current_progress_line = None
-                            self.update_progress(current_value=100)
-                            total_progress = (completed_files / total_links) * 100
-                            self.update_progress(total_value=total_progress)
-                            last_progress = 100
-                        
-                        # 如果正在下载，尝试从输出中解析进度和速度
-                        elif is_downloading:
-                            # 尝试解析速度信息
-                            speed_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMGT]?B)/s', line, re.IGNORECASE)
-                            if speed_match:
-                                value = float(speed_match.group(1))
-                                unit = speed_match.group(2).upper()
-                                
-                                # 转换为字节每秒
-                                multiplier = {
-                                    'B': 1,
-                                    'KB': 1024,
-                                    'MB': 1024 * 1024,
-                                    'GB': 1024 * 1024 * 1024,
-                                    'TB': 1024 * 1024 * 1024 * 1024
-                                }.get(unit, 1)
-                                
-                                speed_in_bytes = value * multiplier
-                                self.update_network_speed(speed_in_bytes, True)
-                            
-                            progress_match = re.search(r'(\d+\.\d+)%', line)
-                            if progress_match and current_progress_line:
-                                file_progress = float(progress_match.group(1))
-                                # 更新进度条
-                                progress_text = f"正在下载 ({current_file_index+1}/{total_links}): {file_url}\n{make_progress_bar(file_progress)}"
-                                self.add_log(progress_text, replace_last=True)
-                                # 更新进度条
-                                self.update_progress(current_value=file_progress)
-                                total_progress = ((completed_files + file_progress / 100) / total_links) * 100
-                                self.update_progress(total_value=total_progress)
-                                last_progress = file_progress
-                            elif not progress_match and not line.startswith("[TDLGUI_MARKER]"):
-                                # 输出非进度信息
-                                self.add_log(line)
+                        return b.decode('utf-8')
+                    except UnicodeDecodeError:
+                        pass
+                    # 再尝试gbk
+                    try:
+                        return b.decode('gbk')
+                    except UnicodeDecodeError:
+                        pass
+                    # 最后用系统默认
+                    try:
+                        return b.decode(locale.getpreferredencoding())
+                    except UnicodeDecodeError:
+                        pass
+                    # fallback
+                    return b.decode('utf-8', errors='replace')
+                except Exception as e:
+                    print(f"解码错误: {str(e)}")
+                    return b.decode('utf-8', errors='replace')
+            
+            # 初始化下载状态
+            self.reset_download_status()
+            total_links = len(links)
+            self.total_tasks = total_links
+            self.completed_tasks = 0
+            
+            # 新增多任务正则
+            multi_task_progress_pattern = re.compile(rb'(?:Total:)?\s*(\d+(?:\.\d+)?)%')
+            multi_task_speed_pattern = re.compile(rb'(\d+(?:\.\d+)?)\s*([KMGT]?B)/s')
+            while True:
+                try:
+                    line = process.stdout.readline()
+                    if not line and process.poll() is not None:
+                        break
                     
-                    except Exception as e:
-                        self.add_log(f"[日志解析错误: {str(e)}]")
+                    if line:
+                        # 处理编码问题
+                        line = line.rstrip(b'\r\n')  # 使用二进制模式处理换行符
+                        
+                        if line:
+                            # 跳过系统信息
+                            if system_info_pattern.search(line):
+                                continue
+                            
+                            # 检测新任务开始
+                            start_match = start_pattern.search(line)
+                            if start_match:
+                                filename_bytes = start_match.group(1)
+                                # 尝试解码文件名
+                                current_task = decode_bytes(filename_bytes)
+                                # 移除可能的控制字符
+                                current_task = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K', '', current_task)
+                                self.add_log(f"→ 开始下载: {current_task}")
+                                continue
+                            
+                            # 检测任务完成
+                            done_match = done_pattern.search(line)
+                            if done_match:
+                                filename_bytes = done_match.group(1)
+                                # 尝试解码文件名
+                                filename = decode_bytes(filename_bytes)
+                                # 移除可能的控制字符
+                                filename = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K', '', filename)
+                                self.add_log(f"√ 完成下载: {filename}")
+                                self.completed_tasks += 1
+                                # 更新总进度
+                                total_progress = (self.completed_tasks / self.total_tasks) * 100
+                                self.update_download_progress(progress=total_progress)
+                                continue
+                            
+                            # 检测进度和速度
+                            progress_match = progress_pattern.search(line)
+                            speed_match = speed_pattern.search(line)
+                            
+                            if self.enable_multi_task:
+                                # 多任务模式：只解析 [#####....] [6s; 1.49 MB/s] 这种行
+                                bar_speed_pattern = re.compile(rb'\[(#+)([\. ]+)\]\s*\[(\d+)s;\s*([\d\.]+)\s*([KMGT]?B)/s\]', re.I)
+                                match = bar_speed_pattern.search(line)
+                                if match:
+                                    bar_count = len(match.group(1))
+                                    total_count = bar_count + len(match.group(2))
+                                    progress = (bar_count / total_count) * 100 if total_count > 0 else 0
+                                    speed_value = float(match.group(4).decode('ascii'))
+                                    speed_unit = match.group(5).decode('ascii').upper()
+                                    multiplier = {
+                                        'B': 1,
+                                        'KB': 1024,
+                                        'MB': 1024 * 1024,
+                                        'GB': 1024 * 1024 * 1024,
+                                        'TB': 1024 * 1024 * 1024 * 1024
+                                    }.get(speed_unit, 1)
+                                    speed_in_bytes = speed_value * multiplier
+                                    speed = self._format_speed(speed_in_bytes)
+                                    self.update_download_progress(progress=progress, speed=speed)
+                                    self.update_network_speed(speed_in_bytes, True)
+                                    # 先写日志，再 continue
+                                    decoded_line = decode_bytes(line)
+                                    decoded_line = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K', '', decoded_line)
+                                    self.add_log(decoded_line)
+                                    continue
+                            else:
+                                # 单任务模式：原有逻辑
+                                if progress_match or speed_match:
+                                    progress = None
+                                    speed = None
+                                    if progress_match:
+                                        current_progress = float(progress_match.group(1))
+                                        completed_progress = (self.completed_tasks / self.total_tasks) * 100
+                                        current_contribution = (current_progress / 100) * (100 / self.total_tasks)
+                                        total_progress = completed_progress + current_contribution
+                                        progress = total_progress
+                                    if speed_match:
+                                        speed_value = float(speed_match.group(1).decode('ascii'))
+                                        speed_unit = speed_match.group(2).decode('ascii')
+                                        unit = speed_unit.upper()
+                                        multiplier = {
+                                            'B': 1,
+                                            'KB': 1024,
+                                            'MB': 1024 * 1024,
+                                            'GB': 1024 * 1024 * 1024,
+                                            'TB': 1024 * 1024 * 1024 * 1024
+                                        }.get(unit, 1)
+                                        speed_in_bytes = speed_value * multiplier
+                                        self.update_network_speed(speed_in_bytes, True)
+                                        speed = self._format_speed(speed_in_bytes)
+                                    self.update_download_progress(
+                                        progress=progress,
+                                        speed=speed
+                                    )
+                            
+                            # 解码当前行
+                            decoded_line = decode_bytes(line)
+                            # 移除可能的控制字符
+                            decoded_line = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]|\[A\[K', '', decoded_line)
+                            
+                            # 如果有当前任务，在输出中添加任务标识
+                            if current_task and decoded_line:  # 确保解码后的行不为空
+                                # 检查是否包含进度信息
+                                if '%' in decoded_line:
+                                    self.add_log(f"  [{current_task}] {decoded_line}")
+                                else:
+                                    self.add_log(f"  {decoded_line}")
+                            elif decoded_line:  # 确保解码后的行不为空
+                                self.add_log(decoded_line)
+                except Exception as e:
+                    self.add_log(f"[日志解析错误: {str(e)}]")
+                    print(f"Debug - 日志解析错误: {str(e)}")
             
             # 删除临时批处理文件
             try:
@@ -1500,8 +1754,15 @@ class TDLDownloaderApp:
             if process in self.running_processes:
                 self.running_processes.remove(process)
             
-            # 完成所有下载
-            self.update_progress(current_value=100, total_value=100, text="下载完成")
+            # 完成所有下载，重置状态
+            self.reset_download_status()
+            self.download_speed_text.value = "0 B/s"
+            self.total_progress_bar.value = 0
+            self.total_progress_text.value = "0%"
+            self.download_speed_text.update()
+            self.total_progress_bar.update()
+            self.total_progress_text.update()
+            
             self.add_log("所有下载任务已完成")
             self.add_log(f"下载文件保存在: {self.downloads_dir}")
             self.add_log("您可以点击「打开下载文件夹」按钮查看下载的文件")
@@ -1509,6 +1770,7 @@ class TDLDownloaderApp:
         except Exception as e:
             self.add_log(f"发生错误: {str(e)}")
             self.show_snackbar(page, f"发生错误: {str(e)}")
+            print(f"Debug - 发生错误: {str(e)}")
         finally:
             try:
                 # 尝试在标签页内容中查找下载按钮
@@ -1525,7 +1787,7 @@ class TDLDownloaderApp:
                                     if download_tab.visible:  # 确保是当前可见的标签页
                                         left_panel = download_tab.content.content.controls[0]  # 获取左侧面板
                                         download_card = left_panel.content.controls[1]  # 获取下载设置卡片
-                                        download_button = download_card.content.content.controls[3].controls[0]  # 获取下载按钮
+                                        download_button = download_card.content.content.controls[5].controls[0]  # 获取下载按钮
                                         break
                 
                 if download_button:
@@ -1621,25 +1883,30 @@ class TDLDownloaderApp:
             size_in_bytes /= 1024.0
         return f"{size_in_bytes:.2f} PB"
 
-    def _format_speed(self, bytes_per_second):
-        """格式化网络速度显示"""
-        if bytes_per_second < 1024:
-            return f"{bytes_per_second:.1f} B/s"
-        elif bytes_per_second < 1024 * 1024:
-            return f"{bytes_per_second/1024:.1f} KB/s"
-        elif bytes_per_second < 1024 * 1024 * 1024:
-            return f"{bytes_per_second/(1024*1024):.1f} MB/s"
+    def _format_speed(self, speed_in_bytes):
+        """格式化网络速度显示
+        Args:
+            speed_in_bytes: 字节每秒的速度
+        Returns:
+            格式化后的速度字符串
+        """
+        if speed_in_bytes < 1024:
+            return f"{speed_in_bytes:.2f} B/s"
+        elif speed_in_bytes < 1024 * 1024:
+            return f"{speed_in_bytes/1024:.2f} KB/s"
+        elif speed_in_bytes < 1024 * 1024 * 1024:
+            return f"{speed_in_bytes/(1024*1024):.2f} MB/s"
         else:
-            return f"{bytes_per_second/(1024*1024*1024):.1f} GB/s"
+            return f"{speed_in_bytes/(1024*1024*1024):.2f} GB/s"
 
-    def update_network_speed(self, speed, is_download=True):
+    def update_network_speed(self, speed_in_bytes, is_download=True):
         """更新网络速度显示
         Args:
-            speed: 速度（字节/秒）
+            speed_in_bytes: 字节每秒的速度
             is_download: 是否为下载速度
         """
         try:
-            formatted_speed = self._format_speed(speed)
+            formatted_speed = self._format_speed(speed_in_bytes)
             if is_download:
                 self.current_download_speed = formatted_speed
                 if self.download_speed_text:
@@ -2011,6 +2278,53 @@ class TDLDownloaderApp:
             self.kill_tdl_processes()
             # 关闭应用
             e.page.window_destroy()
+
+    def reset_download_status(self):
+        """重置下载状态显示"""
+        try:
+            self.download_speed_text.value = "0 B/s"
+            self.total_tasks = 0
+            self.completed_tasks = 0
+            self.current_task_progress = 0
+            self.total_progress_bar.value = 0
+            self.total_progress_text.value = "0%"
+            self.download_speed_text.update()
+            self.total_progress_bar.update()
+            self.total_progress_text.update()
+        except Exception as e:
+            print(f"重置下载状态时出错: {str(e)}")
+
+    def update_download_progress(self, progress=None, speed=None):
+        """更新下载进度显示"""
+        try:
+            # 更新进度
+            if progress is not None:
+                # 更新进度条
+                self.total_progress_bar.value = progress / 100
+                self.total_progress_text.value = f"{progress:.1f}%"
+                self.total_progress_bar.update()
+                self.total_progress_text.update()
+            
+            # 更新速度显示
+            if speed is not None:
+                self.download_speed_text.value = speed
+                self.download_speed_text.update()
+            
+        except Exception as e:
+            print(f"更新下载进度显示时出错: {str(e)}")
+
+    def _copy_logs_to_clipboard(self, e, page):
+        """一键复制所有下载日志到剪贴板"""
+        try:
+            logs = []
+            for c in self.log_view.controls:
+                if hasattr(c, 'content') and hasattr(c.content, 'value'):
+                    logs.append(str(c.content.value))
+            all_logs = '\n'.join(logs)
+            page.set_clipboard(all_logs)
+            self.show_snackbar(page, "日志已复制到剪贴板！")
+        except Exception as ex:
+            self.show_snackbar(page, f"复制失败: {ex}")
 
 if __name__ == "__main__":
     app = TDLDownloaderApp()
