@@ -2043,112 +2043,109 @@ class TDLDownloaderApp:
             self.update_upload_progress(current_value=0, total_value=0, text="准备上传")
             self.upload_complete_text.visible = False
             self.upload_complete_text.update()
-            batch_content = "@echo off\n"
-            batch_content += "chcp 65001\n"
-            batch_content += "set PYTHONIOENCODING=utf-8\n"
-            for var_name, var_value in self.env_vars.items():
-                batch_content += f"set {var_name}={var_value}\n"
+            
             total_files = len(files)
+            
             if enable_multi_upload:
-                up_cmd = f"tdl.exe up -t {threads} -l {concurrent}"
-                for file in files:
-                    up_cmd += f" -p \"{file.path}\""
-                if chat:
-                    up_cmd += f" -c {chat}"
-                if as_photo:
-                    up_cmd += " --photo"
-                if delete_after:
-                    up_cmd += " --rm"
-                batch_content += f"echo [TDLGUI_MARKER] 开始上传 1/{total_files}: 多任务\n"
-                batch_content += f"{up_cmd}\n"
-                batch_content += f"echo [TDLGUI_MARKER] 完成上传 1/{total_files}\n"
-                self.add_upload_log(f"添加上传命令: {up_cmd}")
-            else:
+                # 多任务上传：直接使用Python subprocess调用tdl.exe
+                self.add_upload_log(f"开始多任务上传（共{total_files}个文件）")
+                
+                # 立即设置上传状态
+                self.update_upload_progress(
+                    current_value=0,
+                    total_value=0,
+                    text=f"准备多任务上传 {total_files} 个文件"
+                )
+                
+                # 输出文件列表
                 for i, file in enumerate(files):
-                    up_cmd = f"tdl.exe up -p \"{file.path}\""
-                    if chat:
-                        up_cmd += f" -c {chat}"
-                    if as_photo:
-                        up_cmd += " --photo"
-                    if delete_after:
-                        up_cmd += " --rm"
-                    batch_content += f"echo [TDLGUI_MARKER] 开始上传 {i+1}/{total_files}: {file.name}\n"
-                    batch_content += f"{up_cmd}\n"
-                    batch_content += f"echo [TDLGUI_MARKER] 完成上传 {i+1}/{total_files}\n"
-                    self.add_upload_log(f"添加上传命令: {up_cmd}")
-            
-            # 创建临时批处理文件
-            batch_file = os.path.join(self.base_path, "tdl_upload.bat")
-            with open(batch_file, "w", encoding="utf-8") as f:
-                f.write(batch_content)
-            
-            self.add_upload_log(f"已创建批处理文件: {batch_file}")
-            
-            # 执行批处理文件
-            startupinfo = None
-            if os.name == 'nt':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            
-            process = subprocess.Popen(
-                batch_file,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                bufsize=1,
-                universal_newlines=True,
-                encoding='utf-8',
-                errors='replace',
-                shell=True,
-                startupinfo=startupinfo,
-                env=dict(os.environ, PYTHONIOENCODING='utf-8')  # 设置Python输出编码
-            )
-            
-            # 将进程添加到列表中
-            self.running_processes.append(process)
-            
-            # 在进度解析部分进行优化
-            current_file_index = 0
-            completed_files = 0
-            is_uploading = False
-            last_progress = 0
-            current_progress_line = None  # 当前进度输出行
-            progress_bar_width = 30  # 进度条宽度
-            def make_progress_bar(progress):
-                filled = int(progress_bar_width * progress / 100)
-                bar = '█' * filled + '░' * (progress_bar_width - filled)
-                return f"[{bar}] {progress:.1f}%"
-            while True:
-                line = process.stdout.readline()
-                if not line and process.poll() is not None:
-                    break
-                if line:
-                    try:
-                        if isinstance(line, bytes):
-                            line = line.decode('utf-8', errors='replace')
-                        line = line.strip()
-                        # 检测我们的特殊标记
-                        if "[TDLGUI_MARKER] 开始上传" in line:
-                            last_bytes = 0
-                            last_time = time.time()
-                            self.update_network_speed(0, False)
-                            match = re.search(r'开始上传 (\d+)/(\d+): (.+)$', line)
-                            if match:
-                                current_file_index = int(match.group(1)) - 1
-                                file_name = match.group(3)
-                                is_uploading = True
-                                if enable_multi_upload:
-                                    self.add_upload_log(f"正在多任务上传（共{total_files}个文件）")
-                                else:
-                                    self.add_upload_log(f"正在上传: {file_name}")
-                                self.update_upload_progress(
-                                    current_value=0,
-                                    text=f"上传文件 {current_file_index+1}/{total_files}"
-                                )
-                                total_progress = (completed_files / total_files) * 100
-                                self.update_upload_progress(total_value=total_progress)
-                                last_progress = 0
-                            else:
-                                # 多任务上传时，file_name为"多任务"
+                    self.add_upload_log(f"文件 {i+1}: {file.name}")
+                
+                # 输出上传参数
+                self.add_upload_log(f"上传参数: 线程数={threads}, 并发数={concurrent}")
+                if chat:
+                    self.add_upload_log(f"目标聊天: {chat}")
+                if as_photo:
+                    self.add_upload_log("上传模式: 作为照片")
+                if delete_after:
+                    self.add_upload_log("上传后删除原文件")
+                
+                # 构建tdl.exe命令参数
+                cmd = ["tdl.exe", "up", "-t", str(threads), "-l", str(concurrent)]
+                
+                # 添加文件路径参数
+                for file in files:
+                    cmd.extend(["-p", file.path])
+                
+                # 添加其他参数
+                if chat:
+                    cmd.extend(["-c", chat])
+                if as_photo:
+                    cmd.append("--photo")
+                if delete_after:
+                    cmd.append("--rm")
+                
+                self.add_upload_log(f"执行命令: {' '.join(cmd)}")
+                
+                # 设置环境变量
+                env = dict(os.environ)
+                env['PYTHONIOENCODING'] = 'utf-8'
+                # 添加tdl所需的环境变量
+                for var_name, var_value in self.env_vars.items():
+                    env[var_name] = var_value
+                
+                # 设置启动信息
+                startupinfo = None
+                if os.name == 'nt':
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                
+                # 启动进程
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    bufsize=1,
+                    universal_newlines=True,
+                    encoding='utf-8',
+                    errors='replace',
+                    startupinfo=startupinfo,
+                    env=env
+                )
+                
+                # 将进程添加到列表中
+                self.running_processes.append(process)
+                
+                # 处理输出
+                current_file_index = 0
+                completed_files = 0
+                is_uploading = False
+                last_progress = 0
+                current_progress_line = None  # 当前进度输出行
+                progress_bar_width = 30  # 进度条宽度
+                
+                def make_progress_bar(progress):
+                    filled = int(progress_bar_width * progress / 100)
+                    bar = '█' * filled + '░' * (progress_bar_width - filled)
+                    return f"[{bar}] {progress:.1f}%"
+                
+                while True:
+                    line = process.stdout.readline()
+                    if not line and process.poll() is not None:
+                        break
+                    if line:
+                        try:
+                            if isinstance(line, bytes):
+                                line = line.decode('utf-8', errors='replace')
+                            line = line.strip()
+                            
+                            # 检测上传开始 - 当看到百分比信息时认为开始上传
+                            if ("%" in line and ("MB" in line or "KB" in line) and 
+                                ("ETA" in line or "MB/s" in line or "KB/s" in line) and
+                                not is_uploading):
+                                last_bytes = 0
+                                last_time = time.time()
+                                self.update_network_speed(0, False)
                                 is_uploading = True
                                 self.add_upload_log(f"正在多任务上传（共{total_files}个文件）")
                                 self.update_upload_progress(
@@ -2158,34 +2155,65 @@ class TDLDownloaderApp:
                                 total_progress = (completed_files / total_files) * 100
                                 self.update_upload_progress(total_value=total_progress)
                                 last_progress = 0
-                        elif "[TDLGUI_MARKER] 完成上传" in line:
-                            self.update_network_speed(0, False)
-                            completed_files += 1
-                            is_uploading = False
-                            # 输出完成日志
-                            if enable_multi_upload:
-                                self.add_upload_log(f"完成多任务上传（{total_files}/{total_files}）")
-                            else:
-                                if current_file_index < len(files):
-                                    file_name = files[current_file_index].name if current_file_index < len(files) else ""
-                                    self.add_upload_log(f"完成上传: {file_name}")
-                            self.update_upload_progress(current_value=100)
-                            total_progress = (completed_files / total_files) * 100
-                            self.update_upload_progress(total_value=total_progress)
-                            last_progress = 100
-                        elif is_uploading:
-                            # 只刷新卡片，不进日志
-                            bar_speed_pattern = re.compile(r'^\[#+[\. ]*\]\s*\[\d+s;\s*[\d\.]+\s*[KMGT]?B/s\]$', re.I)
-                            if bar_speed_pattern.match(line):
-                                # 解析进度和速度
-                                bar_only_pattern = re.compile(r'\[(#+)([\. ]+)\]')
-                                bar_match = bar_only_pattern.search(line)
-                                if bar_match:
-                                    bar_count = len(bar_match.group(1))
-                                    total_count = bar_count + len(bar_match.group(2))
-                                    progress = (bar_count / total_count) * 100 if total_count > 0 else 0
-                                else:
-                                    progress = None
+                            
+                            # 检测上传完成
+                            elif ("完成上传" in line or 
+                                  "upload completed" in line.lower() or 
+                                  "successfully uploaded" in line.lower() or 
+                                  "upload finished" in line.lower() or
+                                  "upload done" in line.lower()):
+                                self.update_network_speed(0, False)
+                                completed_files += 1
+                                is_uploading = False
+                                self.add_upload_log(f"完成多任务上传（{completed_files}/{total_files}）")
+                                self.update_upload_progress(current_value=100)
+                                total_progress = (completed_files / total_files) * 100
+                                self.update_upload_progress(total_value=total_progress)
+                                last_progress = 100
+                            
+                            # 处理进度条和速度信息
+                            elif is_uploading:
+                                # 多任务上传时，优先使用总体进度条：[##########################.......................................] [8s; 6.54 MB/s]
+                                bar_speed_pattern = re.compile(r'^\[([#\. ]+)\]\s*\[(\d+)s;\s*([\d\.]+)\s*([KMGT]?B)/s\]$', re.I)
+                                if bar_speed_pattern.match(line):
+                                    # 解析总体进度条
+                                    bar_content = bar_speed_pattern.match(line).group(1)
+                                    time_elapsed = int(bar_speed_pattern.match(line).group(2))
+                                    speed_value = float(bar_speed_pattern.match(line).group(3))
+                                    speed_unit = bar_speed_pattern.match(line).group(4).upper()
+                                    
+                                    # 计算总体进度百分比
+                                    filled_count = bar_content.count('#')
+                                    total_count = len(bar_content)
+                                    if total_count > 0:
+                                        progress = (filled_count / total_count) * 100
+                                        self.update_upload_progress(current_value=progress)
+                                        self.update_upload_progress(total_value=progress)
+                                    
+                                    # 更新速度
+                                    multiplier = {
+                                        'B': 1,
+                                        'KB': 1024,
+                                        'MB': 1024 * 1024,
+                                        'GB': 1024 * 1024 * 1024,
+                                        'TB': 1024 * 1024 * 1024 * 1024
+                                    }.get(speed_unit, 1)
+                                    speed_in_bytes = speed_value * multiplier
+                                    self.update_network_speed(speed_in_bytes, False)
+                                    continue
+                                
+                                # 如果没有总体进度条，则使用百分比进度信息作为备选
+                                percent_match = re.search(r'(\d+\.?\d*)%', line)
+                                if percent_match:
+                                    progress = float(percent_match.group(1))
+                                    # 只有当进度变化超过1%时才更新，避免频繁闪烁
+                                    if abs(progress - last_progress) >= 1.0:
+                                        self.update_upload_progress(current_value=progress)
+                                        total_progress = ((completed_files + progress / 100) / total_files) * 100
+                                        self.update_upload_progress(total_value=total_progress)
+                                        last_progress = progress
+                                
+                                # 检测速度信息
                                 speed_match = re.search(r'([\d\.]+)\s*([KMGT]?B)/s', line, re.IGNORECASE)
                                 if speed_match:
                                     value = float(speed_match.group(1))
@@ -2199,59 +2227,230 @@ class TDLDownloaderApp:
                                     }.get(unit, 1)
                                     speed_in_bytes = value * multiplier
                                     self.update_network_speed(speed_in_bytes, False)
-                                if progress is not None:
-                                    self.update_upload_progress(current_value=progress)
-                                    self.update_upload_progress(total_value=progress)
+                            
+                            # 过滤掉不需要显示的日志（在进度检测之后）
+                            if (line.startswith("Files count:") or 
+                                line.startswith("[.................................................]") or
+                                line.startswith("[") and "]" in line and "s" in line and not any(char in line for char in "0123456789") or
+                                # 过滤tdl.exe的详细进度输出 - 更宽泛的匹配
+                                (line.startswith("D:\\") and "%" in line and ("MB" in line or "KB" in line or "B" in line)) or
+                                # 过滤CPU和内存信息
+                                line.startswith("CPU:") or
+                                # 过滤单个文件的进度条格式：[####........] [10.00 MB in 8.1s; ~ETA: 13s; 1.23 MB/s]
+                                (line.startswith("[") and line.endswith("]") and "ETA" in line)):
                                 continue
-                            # 其它行不进日志
-                            continue
-                        # 其它日志依然保留
-                        speed_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMGT]?B)/s', line, re.IGNORECASE)
-                        if speed_match:
-                            value = float(speed_match.group(1))
-                            unit = speed_match.group(2).upper()
-                            multiplier = {
-                                'B': 1,
-                                'KB': 1024,
-                                'MB': 1024 * 1024,
-                                'GB': 1024 * 1024 * 1024,
-                                'TB': 1024 * 1024 * 1024 * 1024
-                            }.get(unit, 1)
-                            speed_in_bytes = value * multiplier
-                            self.update_network_speed(speed_in_bytes, False)
-                        # 不再输出进度百分比日志
-                        # progress_match = re.search(r'(\d+\.\d+)%', line)
-                        # if progress_match and current_progress_line:
-                        #     file_progress = float(progress_match.group(1))
-                        #     progress_text = f"{current_progress_line.splitlines()[0]}\n{make_progress_bar(file_progress)}"
-                        #     self.add_upload_log(progress_text, replace_last=True)
-                        #     self.update_upload_progress(current_value=file_progress)
-                        #     total_progress = ((completed_files + file_progress / 100) / total_files) * 100
-                        #     self.update_upload_progress(total_value=total_progress)
-                        #     last_progress = file_progress
-                        elif not line.startswith("[TDLGUI_MARKER]"):
-                            self.add_upload_log(line)
-                    except Exception as e:
-                        self.add_upload_log(f"[日志解析错误: {str(e)}]")
-            
-            # 删除临时批处理文件
-            try:
-                os.remove(batch_file)
-                self.add_upload_log("已删除临时批处理文件")
-            except:
-                self.add_upload_log("无法删除临时批处理文件")
-            
-            return_code = process.poll()
-            if return_code == 0:
-                self.add_upload_log("所有文件上传成功!")
-                self.show_snackbar(page, "上传完成！")
+                            
+                            # 输出其他日志
+                            elif not line.startswith("[TDLGUI_MARKER]"):
+                                self.add_upload_log(line)
+                        except Exception as e:
+                            self.add_upload_log(f"[日志解析错误: {str(e)}]")
+                
+                return_code = process.poll()
+                if return_code == 0:
+                    self.add_upload_log("多任务上传成功!")
+                    self.show_snackbar(page, "上传完成！")
+                else:
+                    self.add_upload_log(f"多任务上传过程中出现错误，返回码: {return_code}")
+                    self.show_snackbar(page, f"上传出现错误，返回码: {return_code}")
+                
+                # 从列表中移除已完成的进程
+                if process in self.running_processes:
+                    self.running_processes.remove(process)
+                    
             else:
-                self.add_upload_log(f"上传过程中出现错误，返回码: {return_code}")
-                self.show_snackbar(page, f"上传出现错误，返回码: {return_code}")
-            
-            # 从列表中移除已完成的进程
-            if process in self.running_processes:
-                self.running_processes.remove(process)
+                # 单任务上传：保持原有的批处理文件方式
+                batch_content = "@echo off\n"
+                batch_content += "chcp 65001\n"
+                batch_content += "set PYTHONIOENCODING=utf-8\n"
+                for var_name, var_value in self.env_vars.items():
+                    batch_content += f"set {var_name}={var_value}\n"
+                
+                for i, file in enumerate(files):
+                    up_cmd = f"tdl.exe up -p \"{file.path}\""
+                    if chat:
+                        up_cmd += f" -c {chat}"
+                    if as_photo:
+                        up_cmd += " --photo"
+                    if delete_after:
+                        up_cmd += " --rm"
+                    batch_content += f"echo [TDLGUI_MARKER] 开始上传 {i+1}/{total_files}: {file.name}\n"
+                    batch_content += f"{up_cmd}\n"
+                    batch_content += f"echo [TDLGUI_MARKER] 完成上传 {i+1}/{total_files}\n"
+                    self.add_upload_log(f"添加上传命令: {up_cmd}")
+                
+                # 创建临时批处理文件
+                batch_file = os.path.join(self.base_path, "tdl_upload.bat")
+                with open(batch_file, "w", encoding="utf-8") as f:
+                    f.write(batch_content)
+                
+                self.add_upload_log(f"已创建批处理文件: {batch_file}")
+                
+                # 执行批处理文件
+                startupinfo = None
+                if os.name == 'nt':
+                    startupinfo = subprocess.STARTUPINFO()
+                    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                
+                process = subprocess.Popen(
+                    batch_file,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    bufsize=1,
+                    universal_newlines=True,
+                    encoding='utf-8',
+                    errors='replace',
+                    shell=True,
+                    startupinfo=startupinfo,
+                    env=dict(os.environ, PYTHONIOENCODING='utf-8')  # 设置Python输出编码
+                )
+                
+                # 将进程添加到列表中
+                self.running_processes.append(process)
+                
+                # 在进度解析部分进行优化
+                current_file_index = 0
+                completed_files = 0
+                is_uploading = False
+                last_progress = 0
+                current_progress_line = None  # 当前进度输出行
+                progress_bar_width = 30  # 进度条宽度
+                
+                def make_progress_bar(progress):
+                    filled = int(progress_bar_width * progress / 100)
+                    bar = '█' * filled + '░' * (progress_bar_width - filled)
+                    return f"[{bar}] {progress:.1f}%"
+                
+                while True:
+                    line = process.stdout.readline()
+                    if not line and process.poll() is not None:
+                        break
+                    if line:
+                        try:
+                            if isinstance(line, bytes):
+                                line = line.decode('utf-8', errors='replace')
+                            line = line.strip()
+                            # 检测我们的特殊标记
+                            if "[TDLGUI_MARKER] 开始上传" in line:
+                                last_bytes = 0
+                                last_time = time.time()
+                                self.update_network_speed(0, False)
+                                match = re.search(r'开始上传 (\d+)/(\d+): (.+)$', line)
+                                if match:
+                                    current_file_index = int(match.group(1)) - 1
+                                    file_name = match.group(3)
+                                    is_uploading = True
+                                    if enable_multi_upload:
+                                        self.add_upload_log(f"正在多任务上传（共{total_files}个文件）")
+                                    else:
+                                        self.add_upload_log(f"正在上传: {file_name}")
+                                    self.update_upload_progress(
+                                        current_value=0,
+                                        text=f"上传文件 {current_file_index+1}/{total_files}"
+                                    )
+                                    total_progress = (completed_files / total_files) * 100
+                                    self.update_upload_progress(total_value=total_progress)
+                                    last_progress = 0
+                                else:
+                                    # 多任务上传时，file_name为"多任务"
+                                    is_uploading = True
+                                    self.add_upload_log(f"正在多任务上传（共{total_files}个文件）")
+                                    self.update_upload_progress(
+                                        current_value=0,
+                                        text=f"多任务上传 1/{total_files}"
+                                    )
+                                    total_progress = (completed_files / total_files) * 100
+                                    self.update_upload_progress(total_value=total_progress)
+                                    last_progress = 0
+                            elif "[TDLGUI_MARKER] 完成上传" in line:
+                                self.update_network_speed(0, False)
+                                completed_files += 1
+                                is_uploading = False
+                                # 输出完成日志
+                                if enable_multi_upload:
+                                    self.add_upload_log(f"完成多任务上传（{total_files}/{total_files}）")
+                                else:
+                                    if current_file_index < len(files):
+                                        file_name = files[current_file_index].name if current_file_index < len(files) else ""
+                                        self.add_upload_log(f"完成上传: {file_name}")
+                                self.update_upload_progress(current_value=100)
+                                total_progress = (completed_files / total_files) * 100
+                                self.update_upload_progress(total_value=total_progress)
+                                last_progress = 100
+                            elif is_uploading:
+                                # 只刷新卡片，不进日志
+                                bar_speed_pattern = re.compile(r'^\[#+[\. ]*\]\s*\[\d+s;\s*[\d\.]+\s*[KMGT]?B/s\]$', re.I)
+                                if bar_speed_pattern.match(line):
+                                    # 解析进度和速度
+                                    bar_only_pattern = re.compile(r'\[(#+)([\. ]+)\]')
+                                    bar_match = bar_only_pattern.search(line)
+                                    if bar_match:
+                                        bar_count = len(bar_match.group(1))
+                                        total_count = bar_count + len(bar_match.group(2))
+                                        progress = (bar_count / total_count) * 100 if total_count > 0 else 0
+                                    else:
+                                        progress = None
+                                    speed_match = re.search(r'([\d\.]+)\s*([KMGT]?B)/s', line, re.IGNORECASE)
+                                    if speed_match:
+                                        value = float(speed_match.group(1))
+                                        unit = speed_match.group(2).upper()
+                                        multiplier = {
+                                            'B': 1,
+                                            'KB': 1024,
+                                            'MB': 1024 * 1024,
+                                            'GB': 1024 * 1024 * 1024,
+                                            'TB': 1024 * 1024 * 1024 * 1024
+                                        }.get(unit, 1)
+                                        speed_in_bytes = value * multiplier
+                                        self.update_network_speed(speed_in_bytes, False)
+                                    if progress is not None:
+                                        self.update_upload_progress(current_value=progress)
+                                        total_progress = ((completed_files + progress / 100) / total_files) * 100
+                                        self.update_upload_progress(total_value=total_progress)
+                                    continue
+                                # 其它行不进日志
+                                continue
+                            
+                            # 处理速度信息
+                            speed_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMGT]?B)/s', line, re.IGNORECASE)
+                            if speed_match:
+                                value = float(speed_match.group(1))
+                                unit = speed_match.group(2).upper()
+                                multiplier = {
+                                    'B': 1,
+                                    'KB': 1024,
+                                    'MB': 1024 * 1024,
+                                    'GB': 1024 * 1024 * 1024,
+                                    'TB': 1024 * 1024 * 1024 * 1024
+                                }.get(unit, 1)
+                                speed_in_bytes = value * multiplier
+                                self.update_network_speed(speed_in_bytes, False)
+                            
+                            # 输出其他日志
+                            elif not line.startswith("[TDLGUI_MARKER]"):
+                                self.add_upload_log(line)
+                                
+                        except Exception as e:
+                            self.add_upload_log(f"[日志解析错误: {str(e)}]")
+                
+                # 删除临时批处理文件
+                try:
+                    os.remove(batch_file)
+                    self.add_upload_log("已删除临时批处理文件")
+                except:
+                    self.add_upload_log("无法删除临时批处理文件")
+                
+                return_code = process.poll()
+                if return_code == 0:
+                    self.add_upload_log("所有文件上传成功!")
+                    self.show_snackbar(page, "上传完成！")
+                else:
+                    self.add_upload_log(f"上传过程中出现错误，返回码: {return_code}")
+                    self.show_snackbar(page, f"上传出现错误，返回码: {return_code}")
+                
+                # 从列表中移除已完成的进程
+                if process in self.running_processes:
+                    self.running_processes.remove(process)
             
             # 完成所有上传
             self.update_upload_progress(current_value=100, total_value=100, text="上传完成")
