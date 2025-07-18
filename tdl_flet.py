@@ -106,6 +106,40 @@ class TDLDownloaderApp:
         self.completed_tasks = 0
         self.current_task_progress = 0
 
+        # 日志缓存队列，防止初始化早期log_view未创建时报错
+        self._pending_logs = []
+
+        # 检查并删除残留的 tdl_download.bat 文件
+        tdl_bat_path = os.path.join(self.base_path, "tdl_download.bat")
+        if os.path.exists(tdl_bat_path):
+            try:
+                os.remove(tdl_bat_path)
+                self.add_log("已自动删除残留的 tdl_download.bat 文件")
+            except Exception as e:
+                self.add_log(f"删除残留 tdl_download.bat 文件失败: {e}")
+
+        # 检查并删除下载目录中的所有 .tmp 文件
+        try:
+            for fname in os.listdir(self.downloads_dir):
+                if fname.endswith('.tmp'):
+                    tmp_path = os.path.join(self.downloads_dir, fname)
+                    try:
+                        os.remove(tmp_path)
+                        self.add_log(f"已自动删除残留的临时文件: {fname}")
+                    except Exception as e:
+                        self.add_log(f"删除临时文件 {fname} 失败: {e}")
+        except Exception as e:
+            self.add_log(f"扫描下载目录删除临时文件时出错: {e}")
+
+        # 检查并删除残留的 tdl_upload.bat 文件
+        tdl_upload_bat_path = os.path.join(self.base_path, "tdl_upload.bat")
+        if os.path.exists(tdl_upload_bat_path):
+            try:
+                os.remove(tdl_upload_bat_path)
+                self.add_log("已自动删除残留的 tdl_upload.bat 文件")
+            except Exception as e:
+                self.add_log(f"删除残留 tdl_upload.bat 文件失败: {e}")
+
     def main(self, page: ft.Page):
         # 设置页面属性
         page.title = "TDL下载器"
@@ -307,6 +341,31 @@ class TDLDownloaderApp:
                 height=450,  # 增加日志区域的高度
                 padding=10
             )
+            # >>>> 在log_view创建后，写入所有pending日志
+            if hasattr(self, '_pending_logs') and self._pending_logs:
+                for log, replace_last in self._pending_logs:
+                    # 只传递内容部分，时间戳已包含
+                    if replace_last and len(self.log_view.controls) > 0:
+                        self.log_view.controls[-1].content.value = log
+                        self.log_view.controls[-1].content.update()
+                    else:
+                        self.log_view.controls.append(
+                            ft.Container(
+                                content=ft.Text(log, selectable=True, style=ft.TextStyle(
+                                    size=13,
+                                    weight=ft.FontWeight.W_400,
+                                    color=ft.Colors.GREY_800,
+                                    font_family="Consolas"
+                                )),
+                                padding=ft.padding.symmetric(vertical=2)
+                            )
+                        )
+                self._pending_logs.clear()
+                try:
+                    self.log_view.update()
+                except:
+                    pass
+            # <<<<
             
             # 下载按钮
             download_button = ft.ElevatedButton(
@@ -1347,7 +1406,7 @@ class TDLDownloaderApp:
             elif isinstance(text, str):
                 # 尝试重新编码解码来处理潜在的乱码
                 text = text.encode('utf-8', errors='replace').decode('utf-8')
-            
+            from datetime import datetime
             timestamp = datetime.now().strftime("%H:%M:%S")
             log_text_style = ft.TextStyle(
                 size=13,
@@ -1355,7 +1414,10 @@ class TDLDownloaderApp:
                 color=ft.Colors.GREY_800,
                 font_family="Consolas"  # 使用等宽字体
             )
-            
+            # 日志控件未初始化时，先缓存日志
+            if not hasattr(self, 'log_view') or self.log_view is None:
+                self._pending_logs.append((f"[{timestamp}] {text}", replace_last))
+                return
             # 如果需要替换最后一行
             if replace_last and len(self.log_view.controls) > 0:
                 self.log_view.controls[-1].content.value = f"[{timestamp}] {text}"
@@ -1367,15 +1429,11 @@ class TDLDownloaderApp:
                         padding=ft.padding.symmetric(vertical=2)
                     )
                 )
-                
             if len(self.log_view.controls) > 1000:  # 限制日志数量
                 self.log_view.controls.pop(0)
-            
-            # 检查log_view是否已添加到页面
             try:
                 self.log_view.update()
             except:
-                # 如果未添加到页面，忽略更新错误
                 pass
         except Exception as e:
             print(f"添加日志时出错: {str(e)}")
