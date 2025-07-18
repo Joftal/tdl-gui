@@ -811,8 +811,8 @@ class TDLDownloaderApp:
             
             # 上传配置
             chat_field = ft.TextField(
-                label="目标聊天",
-                hint_text="@用户名 或 聊天ID",
+                label="上传群组ID，为空时默认上传到【收藏】文件夹",
+                hint_text="聊天ID或用户名",
                 prefix_icon=ft.Icons.CHAT_ROUNDED,
                 **textfield_style
             )
@@ -2078,8 +2078,10 @@ class TDLDownloaderApp:
                                 current_file_index = int(match.group(1)) - 1
                                 file_name = match.group(3)
                                 is_uploading = True
-                                current_progress_line = f"正在上传 ({current_file_index+1}/{total_files}): {file_name}\n{make_progress_bar(0)}"
-                                self.add_upload_log(current_progress_line)
+                                if enable_multi_upload:
+                                    self.add_upload_log(f"正在多任务上传（共{total_files}个文件）")
+                                else:
+                                    self.add_upload_log(f"正在上传: {file_name}")
                                 self.update_upload_progress(
                                     current_value=0,
                                     text=f"上传文件 {current_file_index+1}/{total_files}"
@@ -2090,11 +2092,10 @@ class TDLDownloaderApp:
                             else:
                                 # 多任务上传时，file_name为"多任务"
                                 is_uploading = True
-                                current_progress_line = f"正在多任务上传 ({current_file_index+1}/{total_files})\n{make_progress_bar(0)}"
-                                self.add_upload_log(current_progress_line)
+                                self.add_upload_log(f"正在多任务上传（共{total_files}个文件）")
                                 self.update_upload_progress(
                                     current_value=0,
-                                    text=f"多任务上传 {current_file_index+1}/{total_files}"
+                                    text=f"多任务上传 1/{total_files}"
                                 )
                                 total_progress = (completed_files / total_files) * 100
                                 self.update_upload_progress(total_value=total_progress)
@@ -2103,16 +2104,19 @@ class TDLDownloaderApp:
                             self.update_network_speed(0, False)
                             completed_files += 1
                             is_uploading = False
-                            if current_progress_line:
-                                final_progress = f"{current_progress_line.splitlines()[0]}\n{make_progress_bar(100)} - 完成"
-                                self.add_upload_log(final_progress, replace_last=True)
-                                current_progress_line = None
+                            # 输出完成日志
+                            if enable_multi_upload:
+                                self.add_upload_log(f"完成多任务上传（{total_files}/{total_files}）")
+                            else:
+                                if current_file_index < len(files):
+                                    file_name = files[current_file_index].name if current_file_index < len(files) else ""
+                                    self.add_upload_log(f"完成上传: {file_name}")
                             self.update_upload_progress(current_value=100)
                             total_progress = (completed_files / total_files) * 100
                             self.update_upload_progress(total_value=total_progress)
                             last_progress = 100
                         elif is_uploading:
-                            # 单/多任务上传统一刷新逻辑：只在遇到总进度条行时刷新卡片
+                            # 只刷新卡片，不进日志
                             bar_speed_pattern = re.compile(r'^\[#+[\. ]*\]\s*\[\d+s;\s*[\d\.]+\s*[KMGT]?B/s\]$', re.I)
                             if bar_speed_pattern.match(line):
                                 # 解析进度和速度
@@ -2140,12 +2144,10 @@ class TDLDownloaderApp:
                                 if progress is not None:
                                     self.update_upload_progress(current_value=progress)
                                     self.update_upload_progress(total_value=progress)
-                                # 只刷新卡片，不进日志
                                 continue
-                            # 其它行只进日志，不刷新卡片
-                            self.add_upload_log(line)
+                            # 其它行不进日志
                             continue
-                        # 单任务上传原有逻辑
+                        # 其它日志依然保留
                         speed_match = re.search(r'(\d+(?:\.\d+)?)\s*([KMGT]?B)/s', line, re.IGNORECASE)
                         if speed_match:
                             value = float(speed_match.group(1))
@@ -2159,16 +2161,17 @@ class TDLDownloaderApp:
                             }.get(unit, 1)
                             speed_in_bytes = value * multiplier
                             self.update_network_speed(speed_in_bytes, False)
-                        progress_match = re.search(r'(\d+\.\d+)%', line)
-                        if progress_match and current_progress_line:
-                            file_progress = float(progress_match.group(1))
-                            progress_text = f"{current_progress_line.splitlines()[0]}\n{make_progress_bar(file_progress)}"
-                            self.add_upload_log(progress_text, replace_last=True)
-                            self.update_upload_progress(current_value=file_progress)
-                            total_progress = ((completed_files + file_progress / 100) / total_files) * 100
-                            self.update_upload_progress(total_value=total_progress)
-                            last_progress = file_progress
-                        elif not progress_match and not line.startswith("[TDLGUI_MARKER]"):
+                        # 不再输出进度百分比日志
+                        # progress_match = re.search(r'(\d+\.\d+)%', line)
+                        # if progress_match and current_progress_line:
+                        #     file_progress = float(progress_match.group(1))
+                        #     progress_text = f"{current_progress_line.splitlines()[0]}\n{make_progress_bar(file_progress)}"
+                        #     self.add_upload_log(progress_text, replace_last=True)
+                        #     self.update_upload_progress(current_value=file_progress)
+                        #     total_progress = ((completed_files + file_progress / 100) / total_files) * 100
+                        #     self.update_upload_progress(total_value=total_progress)
+                        #     last_progress = file_progress
+                        elif not line.startswith("[TDLGUI_MARKER]"):
                             self.add_upload_log(line)
                     except Exception as e:
                         self.add_upload_log(f"[日志解析错误: {str(e)}]")
