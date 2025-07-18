@@ -466,7 +466,8 @@ class TDLDownloaderApp:
                                     ),
                                 ],
                                 spacing=0,
-                                expand=True
+                                expand=True,
+                                scroll='auto',  # 让左侧内容整体可滚动
                             ),
                             expand=5,
                             padding=ft.padding.only(right=10)
