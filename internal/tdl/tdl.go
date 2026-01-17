@@ -210,7 +210,10 @@ func (c *Client) Download(ctx context.Context, url string, dir string, threads i
 }
 
 func (c *Client) Upload(ctx context.Context, path string, chat string, threads int, remove bool, asPhoto bool, logChan chan<- string) error {
-	args := []string{"upload", "-p", path, "-c", chat, "--threads", fmt.Sprintf("%d", threads)}
+	args := []string{"upload", "-p", path, "--threads", fmt.Sprintf("%d", threads)}
+	if chat != "" {
+		args = append(args, "-c", chat)
+	}
 	if remove {
 		args = append(args, "--rm")
 	}

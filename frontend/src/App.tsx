@@ -34,6 +34,7 @@ function App() {
     const [dlThreads, setDlThreads] = useState(8);
     const [upPath, setUpPath] = useState("");
     const [upChat, setUpChat] = useState("");
+    const [upToSaved, setUpToSaved] = useState(false);
     const [upThreads, setUpThreads] = useState(8);
     const [upRemove, setUpRemove] = useState(false);
     const [upAsPhoto, setUpAsPhoto] = useState(false);
@@ -222,10 +223,11 @@ function App() {
     }
 
     const handleUpload = () => {
-        if (!upPath || !upChat) return;
+        if (!upPath || (!upToSaved && !upChat)) return;
         setStatus("任务启动中...");
         setIsDownloading(true);
-        Upload(upPath, upChat, upThreads, upRemove, upAsPhoto);
+        // If upToSaved is true, pass empty string for chat
+        Upload(upPath, upToSaved ? "" : upChat, upThreads, upRemove, upAsPhoto);
     };
 
     const pickFile = async () => {
@@ -341,7 +343,26 @@ function App() {
                             <>
                                 <div className="form-group">
                                     <label>目标对话 / Chat ID</label>
-                                    <input className="input-main" placeholder="@channel or ID" value={upChat} onChange={e => setUpChat(e.target.value)} disabled={isDownloading} />
+                                    <div style={{ marginBottom: '8px' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', cursor: isDownloading ? 'not-allowed' : 'pointer' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={upToSaved}
+                                                onChange={e => setUpToSaved(e.target.checked)}
+                                                disabled={isDownloading}
+                                                style={{ marginRight: '8px' }}
+                                            />
+                                            上传到收藏夹 (Saved Messages)
+                                        </label>
+                                    </div>
+                                    <input
+                                        className="input-main"
+                                        placeholder="@channel or ID"
+                                        value={upChat}
+                                        onChange={e => setUpChat(e.target.value)}
+                                        disabled={isDownloading || upToSaved}
+                                        style={{ opacity: upToSaved ? 0.5 : 1 }}
+                                    />
                                 </div>
                                 <div className="form-group">
                                     <label>文件路径</label>
@@ -371,7 +392,7 @@ function App() {
                                     <button
                                         className={`btn-primary ${isDownloading ? 'btn-loading' : ''}`}
                                         onClick={handleUpload}
-                                        disabled={!upPath || !upChat || isDownloading}
+                                        disabled={!upPath || (!upToSaved && !upChat) || isDownloading}
                                     >
                                         {isDownloading ? '上传中...' : '开始上传'}
                                     </button>

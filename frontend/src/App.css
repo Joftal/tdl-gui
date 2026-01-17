@@ -251,6 +251,18 @@ body {
 .input-row {
   display: flex;
   gap: 12px;
+  align-items: center;
+}
+
+.input-row .input-main {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+}
+
+.input-row .btn-secondary {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Custom Checkbox */
