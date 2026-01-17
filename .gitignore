@@ -1,0 +1,22 @@
+# Wails
+build/bin/
+build/windows/icon.ico
+build/windows/installer/project.ico
+*.syso
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Config
+config.json
