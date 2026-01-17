@@ -4,12 +4,6 @@
 
 基于实现ui交互：https://github.com/iyear/tdl
 
-## 关于
-
-这是官方的 Wails React-TS 模板。
-
-你可以通过编辑 `wails.json` 来配置项目。关于项目设置的更多信息可以在这里找到：https://wails.io/docs/reference/project-config
-
 ## 实时开发
 
 要运行实时开发模式，请在项目目录中运行 `wails dev`。这将运行一个 Vite 开发服务器，为该前端更改提供非常快速的热重载。如果你想在浏览器中进行开发并访问你的 Go 方法，可以访问运行在 http://localhost:34115 的开发服务器。在浏览器中连接到此地址，即可从开发工具调用你的 Go 代码。
