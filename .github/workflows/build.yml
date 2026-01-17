@@ -12,6 +12,9 @@ env:
   GO_VERSION: '1.23'
   NODE_VERSION: '20'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Windows
@@ -49,3 +52,11 @@ jobs:
           name: tdlui-windows-amd64
           path: build/bin/*.exe
           if-no-files-found: error
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: build/bin/*.exe
+          generate_release_notes: true
+

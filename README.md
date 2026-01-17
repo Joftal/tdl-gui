@@ -1,19 +1,23 @@
 # README
 
-## About
+## 关于
 
-This is the official Wails React-TS template.
+这是官方的 Wails React-TS 模板。
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+你可以通过编辑 `wails.json` 来配置项目。关于项目设置的更多信息可以在这里找到：https://wails.io/docs/reference/project-config
 
-## Live Development
+## 实时开发
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+要运行实时开发模式，请在项目目录中运行 `wails dev`。这将运行一个 Vite 开发服务器，为该前端更改提供非常快速的热重载。如果你想在浏览器中进行开发并访问你的 Go 方法，可以访问运行在 http://localhost:34115 的开发服务器。在浏览器中连接到此地址，即可从开发工具调用你的 Go 代码。
 
-## Building
+## 构建
 
-To build a redistributable, production mode package, use `wails build`.
+要构建可以在生产环境分发和使用的安装包，请使用 `wails build`。
+
+## 更新
+要更新tdl.exe，请确认版本迭代和参数是否有改动，否则不要轻易更换tdl.exe，否则会影响使用。
+
+## 运行
+1、下载最新版tdl.exe
+2、首先使用官方的登录流程进行登录
+3、在程序的【设置】界面选择tdl.exe的路径，和进行相关配置后即可使用。
