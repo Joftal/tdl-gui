@@ -13,6 +13,8 @@ export function GetTDLPath():Promise<string>;
 
 export function GetVersion():Promise<string>;
 
+export function OpenDownloadDir():Promise<void>;
+
 export function ReadTextFile(arg1:string):Promise<string>;
 
 export function SaveWindowSize(arg1:number,arg2:number):Promise<void>;

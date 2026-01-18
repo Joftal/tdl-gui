@@ -26,6 +26,10 @@ export function GetVersion() {
   return window['go']['main']['App']['GetVersion']();
 }
 
+export function OpenDownloadDir() {
+  return window['go']['main']['App']['OpenDownloadDir']();
+}
+
 export function ReadTextFile(arg1) {
   return window['go']['main']['App']['ReadTextFile'](arg1);
 }

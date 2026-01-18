@@ -18,6 +18,6 @@
 
 ## 运行
 
-1、下载最新版tdl.exe：https://docs.iyear.me/tdl/zh/getting-started/installation/
-2、首先使用官方的登录流程进行登录
-3、在程序的【设置】界面选择tdl.exe的路径，和进行相关配置后即可使用。
+## 下载最新版tdl.exe：https://docs.iyear.me/tdl/zh/getting-started/installation/
+## 首先使用官方的登录流程进行登录
+## 在程序的【设置】界面选择tdl.exe的路径，和进行相关配置后即可使用。

@@ -57,6 +57,7 @@ func (c *Client) Version() (string, error) {
 	}
 
 	cmd := exec.Command(c.Path, args...)
+	setHideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", err
@@ -134,6 +135,7 @@ func (c *Client) execute(ctx context.Context, args []string, logChan chan<- stri
 	finalArgs = append(finalArgs, args...)
 
 	cmd := exec.CommandContext(ctx, path, finalArgs...)
+	setHideWindow(cmd)
 
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()

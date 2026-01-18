@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"tdlui/internal/tdl"
 
@@ -140,6 +141,30 @@ func (a *App) SetDownloadPath(path string) {
 // GetDownloadPath returns current download path
 func (a *App) GetDownloadPath() string {
 	return a.config.DownloadPath
+}
+
+// OpenDownloadDir opens the download directory in the system file explorer
+func (a *App) OpenDownloadDir() {
+	path := a.config.DownloadPath
+	if path == "" {
+		path, _ = os.Getwd()
+	}
+
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		absPath = path
+	}
+
+	// Ensure the directory exists
+	if _, err := os.Stat(absPath); os.IsNotExist(err) {
+		os.MkdirAll(absPath, 0755)
+	}
+
+	// Use explorer on Windows for better reliability with local paths
+	// We can't use tdl.SetHideWindow here easily without importing internal,
+	// but explorer is a GUI app so it won't show a console anyway.
+	cmd := exec.Command("explorer", absPath)
+	cmd.Run()
 }
 
 // SelectTDLFile opens a file selection dialog for tdl.exe
