@@ -2,7 +2,13 @@
 
 ## 说明
 
-基于实现ui交互：https://github.com/iyear/tdl
+基于上游仓库实现的ui交互界面：https://github.com/iyear/tdl
+
+## 界面展示
+<img width="987" height="719" alt="image" src="https://github.com/user-attachments/assets/d2ac5fee-f7f3-4e4e-bbe8-ed332c62606a" />
+<img width="1024" height="864" alt="image" src="https://github.com/user-attachments/assets/17de7d37-4d6a-4312-b165-486b0d58f35a" />
+<img width="1021" height="859" alt="image" src="https://github.com/user-attachments/assets/6bf824f9-c829-46b1-9b7b-6eb59408e527" />
+
 
 ## 实时开发
 
