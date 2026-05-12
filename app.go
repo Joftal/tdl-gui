@@ -28,7 +28,25 @@ type App struct {
 }
 
 const configPath = "config.json"
-const defaultTDLPath = `D:\1TDL下载器\tdl.exe`
+
+func getDefaultTDLPath() string {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "tdl.exe"
+	}
+	// 先找 exe 同级目录
+	sameDir := filepath.Join(filepath.Dir(exePath), "tdl.exe")
+	if _, err := os.Stat(sameDir); err == nil {
+		return sameDir
+	}
+	// 再找上两级目录（开发环境 build/bin/ → 项目根目录）
+	parentDir := filepath.Join(filepath.Dir(exePath), "..", "..", "tdl.exe")
+	if _, err := os.Stat(parentDir); err == nil {
+		return filepath.Clean(parentDir)
+	}
+	// 都找不到，返回同级目录作为默认值
+	return sameDir
+}
 
 // NewApp creates a new App application struct
 func NewApp() *App {
@@ -37,7 +55,7 @@ func NewApp() *App {
 
 	path := a.config.TDLPath
 	if path == "" {
-		path = defaultTDLPath
+		path = getDefaultTDLPath()
 	}
 	// Defaults for window size
 	if a.config.Width == 0 {
@@ -115,7 +133,7 @@ func (a *App) SetTDLPath(path string) {
 // GetTDLPath returns current tdl path
 func (a *App) GetTDLPath() string {
 	if a.config.TDLPath == "" {
-		return defaultTDLPath
+		return getDefaultTDLPath()
 	}
 	return a.config.TDLPath
 }
